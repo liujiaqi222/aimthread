@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { readWebSession } from "@/auth/web-session";
 import { AppShell } from "@/components/app-shell";
-import { sessionService, settingsService } from "@/services";
+import { settingsService } from "@/services";
 
 // This segment is cookie-authenticated and reads live DB state on every
 // request; never prerender it against the deployment database.
@@ -14,11 +14,7 @@ export default async function ProtectedLayout({
   children: React.ReactNode;
 }) {
   if (!(await readWebSession())) redirect("/login");
-  // Independent reads — run in parallel (saves a round trip on every page).
-  const [settings, activeSession] = await Promise.all([
-    settingsService.get({ actor: "web" }),
-    sessionService.getActiveSession({ actor: "web" }),
-  ]);
+  const settings = await settingsService.get({ actor: "web" });
   if (!settings.setupCompletedAt) redirect("/setup");
-  return <AppShell activeSession={activeSession}>{children}</AppShell>;
+  return <AppShell>{children}</AppShell>;
 }

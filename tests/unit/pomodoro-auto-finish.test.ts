@@ -112,3 +112,38 @@ it("does not automatically finish at an intermediate deadline", async () => {
   await screen.findByRole("button", { name: /^开始休息$/ });
   expect(finish).not.toHaveBeenCalled();
 });
+
+it("flushes pending notes when leaving through the navigation dialog", async () => {
+  const { SessionNavigationProvider, useSessionNavigation } =
+    await import("@/components/session-navigation");
+  function Navigate() {
+    const { request } = useSessionNavigation();
+    return createElement(
+      "button",
+      { onClick: () => request(() => {}) },
+      "去足迹",
+    );
+  }
+  const finish = vi.fn().mockResolvedValue(true);
+  render(
+    createElement(
+      SessionNavigationProvider,
+      null,
+      createElement(RunPanel, {
+        ...props,
+        session: { ...session, completedFocusCount: 2 },
+        onFinishRequested: finish,
+      }),
+      createElement(Navigate),
+    ),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "去足迹" }));
+  fireEvent.click(await screen.findByRole("button", { name: "结束并离开" }));
+  await waitFor(() =>
+    expect(finish).toHaveBeenCalledWith({
+      note: "未保存的笔记",
+      expectedVersion: 2,
+      changed: true,
+    }),
+  );
+});

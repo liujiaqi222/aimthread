@@ -32,6 +32,7 @@ import { useDistractions } from "@/components/focus/use-distractions";
 import { PhaseProgress, phaseColors } from "./phase-progress";
 import { FocusClock } from "@/components/today/focus-clock";
 import { useNoteAutosave } from "@/components/today/use-note-autosave";
+import { useSessionNavigation } from "@/components/session-navigation";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -171,6 +172,16 @@ export function RunPanel({
       return { note: result.data.note, version: result.data.noteVersion };
     },
   });
+
+  const { register } = useSessionNavigation();
+  const finishForNavigation = useEffectEvent(async () => {
+    if (busy !== "none") return false;
+    return onFinishRequested(await noteAutosave.flush());
+  });
+  useEffect(
+    () => register({ finish: () => finishForNavigation() }),
+    [register],
+  );
 
   const distractions = useDistractions({
     initial: [],
