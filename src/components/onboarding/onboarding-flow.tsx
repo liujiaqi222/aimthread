@@ -118,7 +118,7 @@ function HydratedOnboardingFlow({ endpoint }: { endpoint: string }) {
     } else if (result.data.length === 0) {
       setCandidates([]);
       setCheckMessage(
-        "连接可能已经成功，但 Time OS 里还没有目标。请在 ChatGPT 中确认写入后再检查。",
+        "连接可能已经成功，但 AimThread 里还没有目标。请在 ChatGPT 中确认写入后再检查。",
       );
     } else {
       setCandidates(result.data);
@@ -150,7 +150,7 @@ function HydratedOnboardingFlow({ endpoint }: { endpoint: string }) {
             <span className="grid size-8 place-items-center rounded-xl bg-stone-950 text-white">
               <Target className="size-4" aria-hidden="true" />
             </span>
-            Time OS
+            AimThread
           </div>
           <span className="font-mono text-xs tracking-[0.16em] text-stone-400 uppercase">
             {draft.step === "goal"
@@ -369,7 +369,7 @@ function AiStep({
   onCheck: () => void;
   onChoose: (goalId: string) => void;
 }) {
-  const prompt = `请和我一起讨论一个真正想推进的目标。先帮我把目标和第一个可执行步骤聊清楚，不要一次生成很多任务。只有在我明确确认后，才调用 Time OS 的 goal_create；如果需要再调用 tasks_create，最后用 selection_set 选中它。`;
+  const prompt = `请和我一起讨论一个真正想推进的目标。先帮我把目标和第一个可执行步骤聊清楚，不要一次生成很多任务。只有在我明确确认后，才调用 AimThread 的 goal_create；如果需要再调用 tasks_create，最后用 selection_set 选中它。`;
   return (
     <div className="mx-auto max-w-2xl">
       <div className="flex items-start gap-4">
@@ -408,7 +408,7 @@ function AiStep({
           <CopyValue value={prompt} label="复制开场话术" multiline />
         </AiInstruction>
         <AiInstruction number="3" title="确认写入后，回到这里检查">
-          <p>只有 Time OS 读到了已保存的 Goal，才算完成。</p>
+          <p>只有 AimThread 读到了已保存的 Goal，才算完成。</p>
           <Button
             type="button"
             variant="outline"

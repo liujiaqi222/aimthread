@@ -4,7 +4,7 @@
 
 **依赖：**T06。
 
-**规范：**[PRD](../../prd.md) §4、§5、§8、§9.4。
+**规范：**[PRD](../prd.md) §4、§5、§8、§9.4。
 
 ## 交付结果
 
@@ -105,7 +105,7 @@
 
 ## 交付与验收记录（2026-10-01）
 
-- PR：[#31](https://github.com/liujiaqi222/time-os/pull/31)。本次 AI 客户端范围按开发过程中确认的 ChatGPT 网页端方案交付；Claude 与 Plugin/Skill 工作流留作后续增强。
+- PR：[#31](https://github.com/liujiaqi222/aimthread/pull/31)。本次 AI 客户端范围按开发过程中确认的 ChatGPT 网页端方案交付；Claude 与 Plugin/Skill 工作流留作后续增强。
 - 自动验证：unit 88 项、PostgreSQL integration 23 项、E2E 11 项通过；lint、typecheck、build 通过。后续文档更新不改变运行代码。
 - Vercel HTTPS Preview 部署成功。用户在真实 ChatGPT 客户端完成 OAuth 登录与授权，并确认能正常创建及收到回复。
 - 上述人工证据覆盖真实客户端连接与创建；不扩张为令牌自动续期、撤销后拒绝访问、所有 Web/MCP 交替操作的人工验证。

@@ -9,7 +9,9 @@ test("measure Neon timer click-to-render latency", async ({
   context,
 }) => {
   test.setTimeout(240_000);
-  if (!/^timeos_test_[a-f0-9]{32}$/.test(process.env.TIMEOS_TEST_SCHEMA ?? ""))
+  const testSchema =
+    process.env.AIMTHREAD_TEST_SCHEMA ?? process.env.TIMEOS_TEST_SCHEMA ?? "";
+  if (!/^(aimthread|timeos)_test_[a-f0-9]{32}$/.test(testSchema))
     throw new Error("Timer latency measurements require an isolated schema.");
   await loginAndSetup(page);
   const samples: {
@@ -20,8 +22,9 @@ test("measure Neon timer click-to-render latency", async ({
     actualClickToRenderMs: number;
   }[] = [];
   for (let iteration = 0; iteration < 3; iteration++) {
-    if (process.env.TIMEOS_LATENCY_FRESH === "1")
-      await context.clearCookies({ name: /session_data/ });
+    const fresh =
+      process.env.AIMTHREAD_LATENCY_FRESH ?? process.env.TIMEOS_LATENCY_FRESH;
+    if (fresh === "1") await context.clearCookies({ name: /session_data/ });
     const startResponse = page.waitForResponse(
       (r) =>
         r.url().endsWith("/api/session/start") &&
@@ -100,8 +103,12 @@ test("measure Neon timer click-to-render latency", async ({
     await page.reload();
   }
   await mkdir(".test-data", { recursive: true });
+  const latencyLabel =
+    process.env.AIMTHREAD_LATENCY_LABEL ??
+    process.env.TIMEOS_LATENCY_LABEL ??
+    "baseline";
   await writeFile(
-    `.test-data/timer-latency-${process.env.TIMEOS_LATENCY_LABEL ?? "baseline"}.json`,
+    `.test-data/timer-latency-${latencyLabel}.json`,
     JSON.stringify(samples, null, 2),
   );
   console.log(JSON.stringify(samples));

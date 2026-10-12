@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: { default: "Time OS", template: "%s · Time OS" },
+  title: { default: "AimThread", template: "%s · AimThread" },
   description: "Remember the next action. Record the work.",
 };
 

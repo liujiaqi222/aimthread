@@ -8,7 +8,7 @@ import {
   MCP_WRITE_SCOPE,
 } from "@/auth/auth";
 import { logger } from "@/lib/logger";
-import { createTimeOsMcpServer } from "@/mcp/server";
+import { createAimThreadMcpServer } from "@/mcp/server";
 import {
   dashboardService,
   distractionService,
@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
 
 const handler = createMcpHandler(
   () =>
-    createTimeOsMcpServer({
+    createAimThreadMcpServer({
       settingsService,
       planningService,
       selectionService,

@@ -1,4 +1,4 @@
-# Time OS — MVP PRD
+# AimThread — MVP PRD
 
 **Version:** 0.3
 
@@ -6,11 +6,11 @@
 
 **Status:** 产品范围已确认；按本文与 [T06–T10](tickets/README.md) 实施，尚未代表功能已上线。
 
-本文是当前产品与行为规范。[产品方向](product-direction-v0.3.md) 保留讨论形成的体验说明；[v0.2 存档](archive/prd-v0.2.md) 和 T01–T05 仅作历史参考。本文中的具体默认值是为实现收敛的工程与交互选择，可在实际体验后调整，不增加 MVP 模块。
+本文是当前产品与行为规范。本文中的具体默认值是为实现收敛的工程与交互选择，可在实际体验后调整，不增加 MVP 模块。
 
 ## 1. 定位与唯一核心链路
 
-Time OS 帮用户围绕目标开始执行、留下进展，并在下次打开时接着做。Web 主要用于执行与回看；AI 可以帮助制定和调整计划，用户也可以完全通过 Web 独立使用。
+AimThread 帮用户围绕目标开始执行、留下进展，并在下次打开时接着做。Web 主要用于执行与回看；AI 可以帮助制定和调整计划，用户也可以完全通过 Web 独立使用。
 
 ```text
 确定目标 → 明确下一步 → 开始执行 → 保存进展 → 下次继续
@@ -313,7 +313,7 @@ Web 展示可理解的恢复动作，MCP 返回 code / message / 必需 context�
 
 使用 `DATABASE_URL`、`BETTER_AUTH_SECRET` 与实例公开 `BETTER_AUTH_URL`。Web 仍是单实例单用户，但首次访问在数据库中建立 owner 账户；Cookie 使用 HttpOnly、生产 Secure、SameSite=Lax 和 90 天滑动有效期。登出失效，Secret 轮换使旧会话与令牌失效；登录与写请求继续具备速率限制和同源保护。
 
-MCP 使用 `/mcp` Streamable HTTP 与 OAuth 2.1 authorization-code + PKCE。ChatGPT Plugin 是 OAuth client，Time OS 同时是 authorization server 与 resource server：发布 protected-resource / authorization-server metadata，以 CIMD 确认 ChatGPT 客户端，并按 `timeos:read`、`timeos:write` scope 签发 audience 绑定的短期 access token 与可撤销 refresh token。用户在 Time OS 登录及确认授权；ChatGPT 不接触实例密码，网页也不展示静态 MCP token。
+MCP 使用 `/mcp` Streamable HTTP 与 OAuth 2.1 authorization-code + PKCE。ChatGPT Plugin 是 OAuth client，AimThread 同时是 authorization server 与 resource server：发布 protected-resource / authorization-server metadata，以 CIMD 确认 ChatGPT 客户端，并按 `aimthread:read`、`aimthread:write` scope 签发 audience 绑定的短期 access token 与可撤销 refresh token。用户在 AimThread 登录及确认授权；ChatGPT 不接触实例密码，网页也不展示静态 MCP token。
 
 部署运行提交的建库 / schema migration，Setup 不自行建表。验证新版本空库初始化，不要求旧库升级；本轮不扩张为新的部署平台功能。对外发布前以实际环境复验文档描述，未进行线上验证则明确标注。
 

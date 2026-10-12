@@ -9,11 +9,11 @@ import { databasePoolOptions } from "@/db/pool-options";
 import { env } from "@/env";
 
 const globalDatabase = globalThis as unknown as {
-  timeOsPool?: Pool;
+  aimThreadPool?: Pool;
 };
 
 const pool =
-  globalDatabase.timeOsPool ??
+  globalDatabase.aimThreadPool ??
   new Pool({
     connectionString: env.DATABASE_URL,
     ...databasePoolOptions(process.env),
@@ -25,7 +25,7 @@ Object.assign(pool.options, databasePoolOptions(process.env));
 
 // Next.js can evaluate the database module from multiple route bundles inside
 // one process. Reuse one pool in production too, not just during local HMR.
-globalDatabase.timeOsPool = pool;
+globalDatabase.aimThreadPool = pool;
 
 export const databaseSchema = { ...domainSchema, ...authSchema };
 export const db = drizzle({ client: pool, schema: domainSchema });

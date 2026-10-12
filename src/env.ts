@@ -9,7 +9,7 @@ const inferredAuthUrl = inferPublicOrigin(process.env);
 export const env = createEnv({
   server: serverEnvironmentSchema.shape,
   client: {
-    NEXT_PUBLIC_APP_NAME: z.string().trim().min(1).default("Time OS"),
+    NEXT_PUBLIC_APP_NAME: z.string().trim().min(1).default("AimThread"),
   },
   runtimeEnv: {
     DATABASE_URL: process.env.DATABASE_URL,

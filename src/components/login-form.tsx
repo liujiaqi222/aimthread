@@ -48,7 +48,7 @@ export function LoginForm({
           })
         : await authClient.signUp.email({
             email: OWNER_EMAIL,
-            name: name.success ? name.data : "Time OS Owner",
+            name: name.success ? name.data : "AimThread Owner",
             password,
             callbackURL: returnPath,
           });
@@ -140,8 +140,8 @@ export function LoginForm({
             ? "正在登录…"
             : "正在创建…"
           : ownerExists
-            ? "进入 Time OS"
-            : "保存并进入 Time OS"}
+            ? "进入 AimThread"
+            : "保存并进入 AimThread"}
       </Button>
     </form>
   );

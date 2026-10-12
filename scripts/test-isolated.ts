@@ -23,8 +23,8 @@ async function main() {
     throw new Error("Choose integration or e2e.");
   const source = process.env.DATABASE_URL;
   if (!source) throw new Error("DATABASE_URL is required in .env.local.");
-  const namespace = `timeos_test_${randomUUID().replaceAll("-", "")}`;
-  const directory = await mkdtemp(join(tmpdir(), "timeos-migrations-"));
+  const namespace = `aimthread_test_${randomUUID().replaceAll("-", "")}`;
+  const directory = await mkdtemp(join(tmpdir(), "aimthread-migrations-"));
   const url = new URL(source);
   // Neon transaction pooling rejects a persistent search_path startup option.
   if (url.hostname.endsWith(".neon.tech"))
@@ -72,6 +72,8 @@ async function main() {
           ...process.env,
           DATABASE_URL: url.toString(),
           TEST_DATABASE_URL: url.toString(),
+          AIMTHREAD_TEST_SCHEMA: namespace,
+          AIMTHREAD_TEST_MIGRATIONS: directory,
           TIMEOS_TEST_SCHEMA: namespace,
           TIMEOS_TEST_MIGRATIONS: directory,
         },

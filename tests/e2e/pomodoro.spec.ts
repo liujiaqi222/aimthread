@@ -11,7 +11,9 @@ test.afterAll(() => pool.end());
 
 // Only persisted deadline fixtures in the isolated test schema; no test clock API in production.
 async function expireCurrent(remainingSeconds = -1) {
-  if (!/^timeos_test_[a-f0-9]{32}$/.test(process.env.TIMEOS_TEST_SCHEMA ?? ""))
+  const testSchema =
+    process.env.AIMTHREAD_TEST_SCHEMA ?? process.env.TIMEOS_TEST_SCHEMA ?? "";
+  if (!/^(aimthread|timeos)_test_[a-f0-9]{32}$/.test(testSchema))
     throw new Error("Deadline fixtures require an isolated schema.");
   const client = await pool.connect();
   try {

@@ -82,7 +82,7 @@ function ConsentError({ message }: { message: string }) {
     <main className="grid min-h-screen place-items-center bg-[#f4f1ea] px-5 py-12">
       <div className="w-full max-w-md rounded-3xl border border-stone-200 bg-white p-8 shadow-sm">
         <p className="font-mono text-xs tracking-[0.18em] text-stone-400 uppercase">
-          Time OS · OAuth
+          AimThread · OAuth
         </p>
         <h1 className="mt-3 text-2xl font-semibold text-stone-950">
           无法继续授权

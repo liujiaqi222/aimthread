@@ -57,7 +57,7 @@
 ## 重测
 
 ```sh
-TIMEOS_LATENCY_LABEL=trace pnpm test:e2e tests/e2e/timer-latency.spec.ts
+AIMTHREAD_LATENCY_LABEL=trace pnpm test:e2e tests/e2e/timer-latency.spec.ts
 ```
 
 该命令读取当前 Neon URL，创建并最终删除临时测试 schema。原始样本保存
@@ -88,7 +88,7 @@ TIMEOS_LATENCY_LABEL=trace pnpm test:e2e tests/e2e/timer-latency.spec.ts
 `get-session?disableCookieCache=true` 的回源读取。类型检查和相关 lint 通过。
 
 ```sh
-TIMEOS_LATENCY_FRESH=1 TIMEOS_LATENCY_LABEL=uncached-after pnpm test:e2e tests/e2e/timer-latency.spec.ts
+AIMTHREAD_LATENCY_FRESH=1 AIMTHREAD_LATENCY_LABEL=uncached-after pnpm test:e2e tests/e2e/timer-latency.spec.ts
 ```
 
 原始样本为 `.test-data/timer-latency-uncached-{before,after}.json`。

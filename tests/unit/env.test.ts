@@ -4,9 +4,9 @@ import { parseServerEnvironment } from "@/env/schema";
 import { inferPublicOrigin } from "@/shared/public-origin";
 
 const validEnvironment = {
-  DATABASE_URL: "postgresql://timeos:password@localhost:5432/timeos",
+  DATABASE_URL: "postgresql://aimthread:password@localhost:5432/aimthread",
   BETTER_AUTH_SECRET: "auth-secret-that-is-at-least-32-characters",
-  BETTER_AUTH_URL: "https://time-os.example.com",
+  BETTER_AUTH_URL: "https://aimthread.example.com",
 };
 
 describe("server environment", () => {
@@ -35,7 +35,7 @@ describe("server environment", () => {
     expect(() =>
       parseServerEnvironment({
         ...validEnvironment,
-        BETTER_AUTH_URL: "http://time-os.example.com",
+        BETTER_AUTH_URL: "http://aimthread.example.com",
       }),
     ).toThrow();
   });
@@ -55,21 +55,21 @@ describe("public origin inference", () => {
     expect(
       inferPublicOrigin({
         VERCEL_ENV: "preview",
-        VERCEL_BRANCH_URL: "time-os-git-feature.example.vercel.app",
-        VERCEL_URL: "time-os-random.example.vercel.app",
-        VERCEL_PROJECT_PRODUCTION_URL: "time-os.vercel.app",
+        VERCEL_BRANCH_URL: "aimthread-git-feature.example.vercel.app",
+        VERCEL_URL: "aimthread-random.example.vercel.app",
+        VERCEL_PROJECT_PRODUCTION_URL: "aimthread.vercel.app",
       }),
-    ).toBe("https://time-os-git-feature.example.vercel.app");
+    ).toBe("https://aimthread-git-feature.example.vercel.app");
   });
 
   it("uses the production URL for production deployments", () => {
     expect(
       inferPublicOrigin({
         VERCEL_ENV: "production",
-        VERCEL_BRANCH_URL: "time-os-git-main.example.vercel.app",
-        VERCEL_URL: "time-os-random.example.vercel.app",
-        VERCEL_PROJECT_PRODUCTION_URL: "time-os.example.com",
+        VERCEL_BRANCH_URL: "aimthread-git-main.example.vercel.app",
+        VERCEL_URL: "aimthread-random.example.vercel.app",
+        VERCEL_PROJECT_PRODUCTION_URL: "aimthread.example.com",
       }),
-    ).toBe("https://time-os.example.com");
+    ).toBe("https://aimthread.example.com");
   });
 });

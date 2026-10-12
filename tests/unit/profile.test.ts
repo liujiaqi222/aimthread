@@ -50,7 +50,9 @@ describe("owner profile", () => {
     fireEvent.change(screen.getByLabelText("确认实例密码"), {
       target: { value: "long-password-456" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "保存并进入 Time OS" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "保存并进入 AimThread" }),
+    );
     await screen.findByText("两次输入的密码不一致。");
     expect(authClient.signUp.email).not.toHaveBeenCalled();
   });
@@ -71,7 +73,9 @@ describe("owner profile", () => {
         target: { value: "long-password-123" },
       });
     }
-    fireEvent.click(screen.getByRole("button", { name: "保存并进入 Time OS" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "保存并进入 AimThread" }),
+    );
     await waitFor(() =>
       expect(authClient.signUp.email).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -96,7 +100,7 @@ describe("owner profile", () => {
       data: { status: true },
       error: null,
     } as never);
-    render(createElement(ProfileForm, { name: "Time OS Owner" }));
+    render(createElement(ProfileForm, { name: "AimThread Owner" }));
     fireEvent.change(screen.getByLabelText("你的名称"), {
       target: { value: " 小刘 " },
     });
