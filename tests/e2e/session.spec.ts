@@ -196,34 +196,84 @@ test.describe("Goal-direct execution loop", () => {
     await expect(page.getByRole("button", { name: /开始专注/ })).toBeVisible();
   });
 
-  test("a running Session shows the compact banner on other pages", async ({
-    page,
-  }) => {
-    await loginAndSetup(page);
-    await ensureNoActiveSession(page);
+  for (const mode of ["正计时", "番茄钟"] as const) {
+    test(`leaving an active ${mode} confirms and saves before navigation`, async ({
+      page,
+    }) => {
+      await loginAndSetup(page);
+      await ensureNoActiveSession(page);
+      if (mode === "番茄钟")
+        await page.setViewportSize({ width: 375, height: 812 });
+      const nav = page.getByRole("navigation", { name: "主导航" });
+      await nav.locator('a[href="/history"]').filter({ visible: true }).click();
+      await expect(page).toHaveURL(/\/history$/);
+      await nav.locator('a[href="/today"]').filter({ visible: true }).click();
+      await expect(page).toHaveURL(/\/today$/);
+      await page.getByRole("button", { name: mode, exact: true }).click();
+      await page
+        .getByRole("button", { name: /开始第一次执行|开始专注/ })
+        .click();
+      await expect(page.getByRole("button", { name: /暂停/ })).toBeVisible();
+      const historyLink = page
+        .getByRole("navigation", { name: "主导航" })
+        .locator('a[href="/history"]')
+        .filter({ visible: true });
+      await historyLink.click();
+      await expect(
+        page.getByRole("dialog", { name: "计时进行中" }),
+      ).toBeVisible();
+      await page.getByRole("button", { name: "继续计时", exact: true }).click();
+      await page.evaluate(() => window.history.back());
+      await expect(
+        page.getByRole("dialog", { name: "计时进行中" }),
+      ).toBeVisible();
+      await expect(page).toHaveURL(/\/today/);
+      await page.getByRole("button", { name: "继续计时", exact: true }).click();
+      await historyLink.click();
+      await expect(
+        page.getByRole("dialog", { name: "计时进行中" }),
+      ).toBeVisible();
+      await expect(page).toHaveURL(/\/today/);
+      await page.getByRole("button", { name: "继续计时", exact: true }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /暂停/ })).toBeVisible();
 
-    await page.goto("/today");
-    await page.getByRole("button", { name: "正计时", exact: true }).click();
-    await page.getByRole("button", { name: /开始第一次执行|开始专注/ }).click();
-    await expect(page.getByRole("timer", { name: "已专注时间" })).toBeVisible();
-
-    // Other pages show the compact banner, never a second timer.
-    await page.goto("/history");
-    const banner = page.getByRole("region", {
-      name: "进行中的专注提示条",
+      // Paused Sessions also need a deliberate finish before leaving.
+      await page.getByRole("button", { name: /暂停/ }).click();
+      await expect(page.getByRole("button", { name: /^继续$/ })).toBeVisible();
+      await historyLink.click();
+      // A failed save must keep the dialog and the current route.
+      await page.route("**/api/session/finish", (route) =>
+        route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({
+            ok: false,
+            error: { code: "DATABASE_UNAVAILABLE", message: "test failure" },
+          }),
+        }),
+      );
+      await page.getByRole("button", { name: "结束并离开" }).click();
+      await expect(page.getByRole("dialog").getByRole("alert")).toBeVisible();
+      await expect(page).toHaveURL(/\/today/);
+      await page.unroute("**/api/session/finish");
+      await page.getByRole("button", { name: "结束并离开" }).click();
+      await expect(page).toHaveURL(/\/history$/);
+      await expect(
+        page.getByRole("region", { name: "进行中的专注提示条" }),
+      ).toHaveCount(0);
+      const active = await page.request.get("/api/session/active");
+      expect(await active.json()).toMatchObject({ ok: true, data: null });
+      await page
+        .getByRole("navigation", { name: "主导航" })
+        .locator('a[href="/today"]')
+        .filter({ visible: true })
+        .click();
+      await expect(
+        page.getByRole("button", { name: /开始专注/ }),
+      ).toBeVisible();
     });
-    await expect(banner).toBeVisible();
-    await banner.getByRole("button", { name: /回到今天/ }).click();
-    await expect(page).toHaveURL(/\/today$/);
-    await expect(page.getByRole("timer", { name: "已专注时间" })).toBeVisible();
-
-    // Clean up for the next test.
-    await page
-      .getByRole("button", { name: "取消本次执行", exact: true })
-      .click();
-    await page.getByRole("button", { name: "确定取消" }).click();
-    await expect(page.getByRole("button", { name: /开始专注/ })).toBeVisible();
-  });
+  }
 
   test("full operation works at 375px and the primary action stays reachable", async ({
     page,

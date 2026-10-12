@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { SessionLink as Link } from "@/components/session-navigation";
 import { usePathname } from "next/navigation";
 import { Footprints, SunMedium } from "lucide-react";
 
