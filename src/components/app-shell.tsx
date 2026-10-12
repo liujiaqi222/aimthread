@@ -26,7 +26,7 @@ export function AppShell({
               className="flex items-center gap-2 font-semibold tracking-[-0.025em]"
             >
               <Image src="/icon.svg" alt="" width={28} height={28} priority />
-              <span>Time OS</span>
+              <span>AimThread</span>
             </Link>
             <PrimaryNav variant="desktop" />
             <div className="flex items-center gap-1">

@@ -102,7 +102,7 @@ export function createSettingsService(database: Database): SettingsService {
         if (error instanceof DomainError) throw error;
         throw new DomainError(
           "SCHEMA_NOT_READY",
-          "Database is reachable, but the Time OS schema is missing. Run migrations.",
+          "Database is reachable, but the AimThread schema is missing. Run migrations.",
         );
       }
     },

@@ -1,1 +1,1 @@
-export const OWNER_EMAIL = "owner@timeos.local";
+export const OWNER_EMAIL = "owner@aimthread.local";

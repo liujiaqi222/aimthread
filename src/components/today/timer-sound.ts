@@ -12,7 +12,7 @@ export function remindPhaseOnce(id: string, enabled: boolean) {
   if (reminded.has(id)) return;
   reminded.add(id);
   try {
-    const key = `timeos:phase-reminded:${id}`;
+    const key = `aimthread:phase-reminded:${id}`;
     if (sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, "1");
   } catch {

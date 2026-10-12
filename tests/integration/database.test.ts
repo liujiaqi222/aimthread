@@ -15,17 +15,23 @@ import { createSessionService } from "@/services/session";
 import { createHistoryService } from "@/services/history";
 import { createStatisticsService } from "@/services/statistics";
 import { planningContract } from "@/adapters/planning-contract";
-import { createTimeOsMcpServer } from "@/mcp/server";
+import { createAimThreadMcpServer } from "@/mcp/server";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 
 const databaseUrl =
   process.env.TEST_DATABASE_URL ??
-  "postgresql://postgres:postgres@localhost:55432/time_os_test";
+  "postgresql://postgres:postgres@localhost:55432/aimthread_test";
 const parsedUrl = new URL(databaseUrl);
-const testSchema = process.env.TIMEOS_TEST_SCHEMA ?? "public";
-const isolated = /^timeos_test_[a-f0-9]{32}$/.test(testSchema);
+const testSchema =
+  process.env.AIMTHREAD_TEST_SCHEMA ??
+  process.env.TIMEOS_TEST_SCHEMA ??
+  "public";
+const isolated = /^(aimthread|timeos)_test_[a-f0-9]{32}$/.test(testSchema);
 const migrationOptions = {
-  migrationsFolder: process.env.TIMEOS_TEST_MIGRATIONS ?? "drizzle",
+  migrationsFolder:
+    process.env.AIMTHREAD_TEST_MIGRATIONS ??
+    process.env.TIMEOS_TEST_MIGRATIONS ??
+    "drizzle",
   migrationsSchema: isolated ? `${testSchema}_migrations` : "drizzle",
 };
 
@@ -1149,7 +1155,7 @@ describe("MCP server over the real protocol", () => {
   const web = { actor: "web" } as const;
 
   const handler = createMcpHandler(() =>
-    createTimeOsMcpServer({
+    createAimThreadMcpServer({
       settingsService,
       planningService,
       selectionService,
@@ -1216,7 +1222,7 @@ describe("MCP server over the real protocol", () => {
     });
     expect(init.result).toBeDefined();
     const { serverInfo } = init.result as { serverInfo?: { name?: string } };
-    expect(serverInfo?.name).toBe("time-os");
+    expect(serverInfo?.name).toBe("aimthread");
 
     const listed = await rpc("tools/list", {});
     const names = (

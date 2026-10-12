@@ -1,4 +1,4 @@
-# Time OS
+# AimThread
 
 A personal, AI-native goal execution and time accounting system designed to help users start, track progress, and seamlessly resume work.
 

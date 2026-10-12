@@ -84,7 +84,7 @@ function toolResult(result: object, error?: string) {
  * Track / Current-Next registrations are gone — Goal, Task and Session
  * hang off each other directly.
  */
-export function createTimeOsMcpServer(deps: {
+export function createAimThreadMcpServer(deps: {
   settingsService: SettingsService;
   planningService: PlanningService;
   selectionService: SelectionService;
@@ -104,14 +104,14 @@ export function createTimeOsMcpServer(deps: {
     historyService,
     statisticsService,
   } = deps;
-  const server = new McpServer({ name: "time-os", version: "0.3.0" });
+  const server = new McpServer({ name: "aimthread", version: "0.3.0" });
 
   server.registerTool(
     "system_health",
     {
-      title: "Time OS health",
+      title: "AimThread health",
       description:
-        "Check that the authenticated Time OS endpoint and database schema are ready.",
+        "Check that the authenticated AimThread endpoint and database schema are ready.",
       inputSchema: z.object({}).strict(),
       annotations: toolAnnotations("system_health"),
       _meta: oauthToolMeta,
@@ -126,7 +126,7 @@ export function createTimeOsMcpServer(deps: {
             ok: false,
             error: {
               code: "SCHEMA_NOT_READY",
-              message: "The Time OS database schema is not ready.",
+              message: "The AimThread database schema is not ready.",
             },
           },
           "Schema is not ready",
@@ -140,7 +140,7 @@ export function createTimeOsMcpServer(deps: {
     {
       title: "Get settings",
       description:
-        "Read Time OS timezone, week start, and preferred timer mode.",
+        "Read AimThread timezone, week start, and preferred timer mode.",
       inputSchema: z.object({}).strict(),
       annotations: toolAnnotations("settings_get"),
       _meta: oauthToolMeta,
@@ -158,7 +158,7 @@ export function createTimeOsMcpServer(deps: {
     "settings_update",
     {
       title: "Update settings",
-      description: "Update Time OS timezone and week start.",
+      description: "Update AimThread timezone and week start.",
       inputSchema: updateSettingsSchema,
       annotations: toolAnnotations("settings_update"),
       _meta: oauthToolMeta,
@@ -616,3 +616,5 @@ export function createTimeOsMcpServer(deps: {
 
   return server;
 }
+
+export const createTimeOsMcpServer = createAimThreadMcpServer;

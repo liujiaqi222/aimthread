@@ -10,7 +10,7 @@ export default defineConfig({
   dbCredentials: {
     url:
       process.env.DATABASE_URL ??
-      "postgresql://timeos:timeos@localhost:5432/timeos",
+      "postgresql://aimthread:aimthread@localhost:5432/aimthread",
   },
   strict: true,
   verbose: true,

@@ -34,10 +34,10 @@ async function main() {
            dpop_bound_access_tokens_required, policy_version, created_at, updated_at)
          values ($1, $2, $2, 3600, $3, false, false, 1, now(), now())
          on conflict (identifier) do nothing`,
-        [randomUUID(), resource, ["timeos:read", "timeos:write"]],
+        [randomUUID(), resource, ["aimthread:read", "aimthread:write"]],
       );
     }
-    console.info("Time OS database migrations are up to date.");
+    console.info("AimThread database migrations are up to date.");
   } finally {
     await pool.end();
   }

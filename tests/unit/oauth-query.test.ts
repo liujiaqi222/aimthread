@@ -9,7 +9,7 @@ async function signedQuery(expiresAt: number) {
   const params = new URLSearchParams({
     client_id: "https://chatgpt.com/oauth/client.json",
     exp: String(expiresAt),
-    scope: "timeos:read timeos:write",
+    scope: "aimthread:read aimthread:write",
   });
   params.set("sig", await makeSignature(params.toString(), secret));
   return params.toString();
@@ -34,7 +34,7 @@ describe("OAuth redirect query", () => {
     const raw = await signedQuery(2_000_000_000);
     expect(
       await verifySignedOAuthQuery(
-        raw.replace("timeos%3Aread", "timeos%3Aadmin"),
+        raw.replace("aimthread%3Aread", "aimthread%3Aadmin"),
         secret,
         new Date("2026-01-01"),
       ),

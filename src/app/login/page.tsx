@@ -23,7 +23,7 @@ export default async function LoginPage({
             执行系统
           </p>
           <h1 className="text-4xl font-semibold tracking-tight text-stone-950">
-            Time OS
+            AimThread
           </h1>
           <p className="text-stone-600">记住下一步，也记住你真正投入的时间。</p>
         </div>

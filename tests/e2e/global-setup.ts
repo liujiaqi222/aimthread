@@ -9,8 +9,11 @@ export default async function globalSetup() {
   const databaseUrl = process.env.TEST_DATABASE_URL;
   if (!databaseUrl) throw new Error("TEST_DATABASE_URL is required for E2E.");
   const parsed = new URL(databaseUrl);
-  const testSchema = process.env.TIMEOS_TEST_SCHEMA ?? "public";
-  const isolated = /^timeos_test_[a-f0-9]{32}$/.test(testSchema);
+  const testSchema =
+    process.env.AIMTHREAD_TEST_SCHEMA ??
+    process.env.TIMEOS_TEST_SCHEMA ??
+    "public";
+  const isolated = /^(aimthread|timeos)_test_[a-f0-9]{32}$/.test(testSchema);
   const migrationsSchema = isolated ? `${testSchema}_migrations` : "drizzle";
   if (
     !isolated &&
@@ -28,7 +31,10 @@ export default async function globalSetup() {
     await pool.query(`drop schema if exists "${migrationsSchema}" cascade`);
     await pool.query(`create schema "${testSchema}"`);
     await migrate(drizzle(pool), {
-      migrationsFolder: process.env.TIMEOS_TEST_MIGRATIONS ?? "drizzle",
+      migrationsFolder:
+        process.env.AIMTHREAD_TEST_MIGRATIONS ??
+        process.env.TIMEOS_TEST_MIGRATIONS ??
+        "drizzle",
       migrationsSchema,
     });
   } finally {

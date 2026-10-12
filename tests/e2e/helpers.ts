@@ -13,7 +13,7 @@ export const mcpEnvelope = {
   "io.modelcontextprotocol/protocolVersion": "2026-07-28",
   "io.modelcontextprotocol/clientCapabilities": {},
   "io.modelcontextprotocol/clientInfo": {
-    name: "time-os-e2e",
+    name: "aimthread-e2e",
     version: "1.0.0",
   },
 };
@@ -21,7 +21,7 @@ export const mcpEnvelope = {
 const baseUrl = "http://127.0.0.1:3010";
 const databaseUrl =
   process.env.TEST_DATABASE_URL ??
-  "postgresql://postgres:postgres@localhost:55432/time_os_test";
+  "postgresql://postgres:postgres@localhost:55432/aimthread_test";
 
 export async function loginAndSetup(page: Page) {
   await page.goto("/login?next=/setup");
@@ -32,10 +32,10 @@ export async function loginAndSetup(page: Page) {
     await page.getByLabel("你的名称").fill("E2E Owner");
     await createPassword.fill(webPassword);
     await page.getByLabel("确认实例密码").fill(webPassword);
-    await page.getByRole("button", { name: "保存并进入 Time OS" }).click();
+    await page.getByRole("button", { name: "保存并进入 AimThread" }).click();
   } else {
     await page.getByLabel("实例密码", { exact: true }).fill(webPassword);
-    await page.getByRole("button", { name: "进入 Time OS" }).click();
+    await page.getByRole("button", { name: "进入 AimThread" }).click();
   }
 
   // Use setup as the explicit login callback, so its redirect does not
@@ -108,9 +108,9 @@ export async function createMcpAccessToken(request: APIRequestContext) {
     const signed = await signer.api.signJWT({
       body: {
         payload: {
-          scope: "timeos:read timeos:write",
-          client_id: "time-os-e2e",
-          sub: "time-os-e2e-owner",
+          scope: "aimthread:read aimthread:write",
+          client_id: "aimthread-e2e",
+          sub: "aimthread-e2e-owner",
         },
         overrideOptions: {
           jwt: {

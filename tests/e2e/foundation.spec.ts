@@ -16,7 +16,9 @@ test("first-run account, setup, onboarding, session persistence, and logout", as
   await expect(page).toHaveURL(/\/login\?next=/);
 
   await page.getByLabel("设置实例密码").fill(webPassword);
-  await page.getByRole("button", { name: "创建并进入 Time OS" }).click();
+  await page
+    .getByRole("button", { name: /(创建|保存)并进入 AimThread/ })
+    .click();
   await expect(page).toHaveURL(/\/setup$/);
   await expect(page.getByText("数据库已就绪")).toBeVisible();
 
@@ -24,7 +26,7 @@ test("first-run account, setup, onboarding, session persistence, and logout", as
   await page.getByRole("button", { name: "完成设置" }).click();
 
   await expect(page).toHaveURL(/\/onboarding$/);
-  await page.getByLabel("目标标题").fill("完成 Time OS 首次验证");
+  await page.getByLabel("目标标题").fill("完成 AimThread 首次验证");
   await page.getByRole("button", { name: "继续" }).click();
   await page.getByLabel("我最期待的是").fill("验证第一次执行链路");
   await page.getByRole("button", { name: "保存目标，准备开始" }).click();
@@ -52,7 +54,7 @@ test("OAuth discovery, bearer challenges, and scoped MCP access", async ({
   await expect(metadataResponse.json()).resolves.toMatchObject({
     resource: "http://127.0.0.1:3010/mcp",
     authorization_servers: ["http://127.0.0.1:3010/api/auth"],
-    scopes_supported: ["timeos:read", "timeos:write"],
+    scopes_supported: ["aimthread:read", "aimthread:write"],
   });
 
   const authorizationMetadataResponse = await request.get(
@@ -132,7 +134,7 @@ test("OAuth discovery, bearer challenges, and scoped MCP access", async ({
       securitySchemes: [
         {
           type: "oauth2",
-          scopes: ["timeos:read", "timeos:write"],
+          scopes: ["aimthread:read", "aimthread:write"],
         },
       ],
     },
@@ -206,7 +208,7 @@ test("setup shows an actionable error when the schema is incomplete", async ({
 
   const databaseUrl =
     process.env.TEST_DATABASE_URL ??
-    "postgresql://postgres:postgres@localhost:55432/time_os_test";
+    "postgresql://postgres:postgres@localhost:55432/aimthread_test";
   const pool = new Pool({ connectionString: databaseUrl });
   try {
     await pool.query("drop table app_settings");
@@ -220,10 +222,14 @@ test("setup shows an actionable error when the schema is incomplete", async ({
 
   const recoveryPool = new Pool({ connectionString: databaseUrl });
   try {
-    const testSchema = process.env.TIMEOS_TEST_SCHEMA ?? "public";
-    const migrationsSchema = process.env.TIMEOS_TEST_SCHEMA
-      ? `${testSchema}_migrations`
-      : "drizzle";
+    const testSchema =
+      process.env.AIMTHREAD_TEST_SCHEMA ??
+      process.env.TIMEOS_TEST_SCHEMA ??
+      "public";
+    const migrationsSchema =
+      (process.env.AIMTHREAD_TEST_SCHEMA ?? process.env.TIMEOS_TEST_SCHEMA)
+        ? `${testSchema}_migrations`
+        : "drizzle";
     await recoveryPool.query(`drop schema if exists "${testSchema}" cascade`);
     await recoveryPool.query(
       `drop schema if exists "${migrationsSchema}" cascade`,
@@ -232,7 +238,10 @@ test("setup shows an actionable error when the schema is incomplete", async ({
     const { drizzle } = await import("drizzle-orm/node-postgres");
     const { migrate } = await import("drizzle-orm/node-postgres/migrator");
     await migrate(drizzle(recoveryPool), {
-      migrationsFolder: process.env.TIMEOS_TEST_MIGRATIONS ?? "drizzle",
+      migrationsFolder:
+        process.env.AIMTHREAD_TEST_MIGRATIONS ??
+        process.env.TIMEOS_TEST_MIGRATIONS ??
+        "drizzle",
       migrationsSchema,
     });
   } finally {

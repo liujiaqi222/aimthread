@@ -17,7 +17,7 @@ export type OnboardingDraft = z.infer<typeof onboardingDraftSchema>;
 
 export function onboardingDraftStorageKey(origin: string): string {
   const instanceOrigin = new URL(origin).origin;
-  return `time-os:onboarding:v1:${instanceOrigin}`;
+  return `aimthread:onboarding:v1:${instanceOrigin}`;
 }
 
 export function parseOnboardingDraft(

@@ -7,8 +7,8 @@ import { authClient } from "@/auth/auth-client";
 import { Button } from "@/components/ui/button";
 
 const scopeCopy: Record<string, string> = {
-  "timeos:read": "读取你的目标、任务和执行记录",
-  "timeos:write": "创建和更新目标、任务与执行记录",
+  "aimthread:read": "读取你的目标、任务和执行记录",
+  "aimthread:write": "创建和更新目标、任务与执行记录",
   offline_access: "在连接有效期内保持授权，不必每次重新登录",
 };
 
@@ -43,7 +43,7 @@ export function OAuthConsentCard({
         </div>
         <div>
           <p className="font-mono text-xs tracking-[0.16em] uppercase">
-            Time OS · 安全连接
+            AimThread · 安全连接
           </p>
           <p className="mt-1 text-sm">由你决定是否允许这次访问</p>
         </div>
@@ -53,8 +53,8 @@ export function OAuthConsentCard({
         连接 {clientName}
       </h1>
       <p className="mt-3 leading-7 text-stone-600">
-        授权后，你可以在 ChatGPT 对话中讨论目标，并在确认后让它写入当前 Time OS
-        实例。
+        授权后，你可以在 ChatGPT 对话中讨论目标，并在确认后让它写入当前
+        AimThread 实例。
       </p>
 
       <div className="mt-7 rounded-2xl bg-stone-50 p-5">

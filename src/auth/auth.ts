@@ -23,7 +23,7 @@ const appOrigin = new URL(env.BETTER_AUTH_URL).origin;
 export const MCP_RESOURCE = new URL("/mcp", appOrigin).toString();
 
 export const auth = betterAuth({
-  appName: "Time OS",
+  appName: "AimThread",
   baseURL: appOrigin,
   secret: env.BETTER_AUTH_SECRET,
   database: drizzleAdapter(authDb, { provider: "pg", schema: authSchema }),
@@ -54,7 +54,7 @@ export const auth = betterAuth({
         before: async (user) => {
           if (user.email !== OWNER_EMAIL) {
             throw new APIError("BAD_REQUEST", {
-              message: "This Time OS instance accepts one owner account.",
+              message: "This AimThread instance accepts one owner account.",
             });
           }
 
@@ -65,7 +65,7 @@ export const auth = betterAuth({
           );
           if (existing.rows.length > 0) {
             throw new APIError("BAD_REQUEST", {
-              message: "This Time OS instance already has an owner.",
+              message: "This AimThread instance already has an owner.",
             });
           }
 

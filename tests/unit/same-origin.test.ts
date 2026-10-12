@@ -13,15 +13,15 @@ describe("browser authority checks", () => {
   });
   it.each([
     "https://foreign.example",
-    "http://timeos.example:3000",
-    "http://timeos.example",
+    "http://aimthread.example:3000",
+    "http://aimthread.example",
     "null",
     "",
   ])("rejects a mismatched or missing origin: %s", (origin) => {
     expect(
       isSameOriginRequest(
         new Request("https://internal.example/api/session/transition", {
-          headers: { host: "timeos.example", origin },
+          headers: { host: "aimthread.example", origin },
         }),
       ),
     ).toBe(false);
@@ -31,8 +31,8 @@ describe("browser authority checks", () => {
       isSameOriginRequest(
         new Request("https://internal.example/api/session/transition", {
           headers: {
-            host: "timeos.example",
-            origin: "https://timeos.example",
+            host: "aimthread.example",
+            origin: "https://aimthread.example",
             "x-forwarded-host": "foreign.example",
           },
         }),

@@ -78,8 +78,8 @@ export default async function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4 text-sm text-stone-600">
           <p>
-            在 ChatGPT 网页端的 Plugins 中添加这个 MCP 地址。连接时会回到 Time
-            OS 登录并显示授权确认；无需复制 API Token。
+            在 ChatGPT 网页端的 Plugins 中添加这个 MCP 地址。连接时会回到
+            AimThread 登录并显示授权确认；无需复制 API Token。
           </p>
           <code className="block overflow-x-auto rounded-lg bg-stone-100 px-3 py-2 text-xs text-stone-900">
             {MCP_RESOURCE}
@@ -96,7 +96,7 @@ export default async function SettingsPage() {
                   <div>
                     <p className="font-medium text-stone-900">ChatGPT</p>
                     <p className="mt-0.5 text-xs text-stone-500">
-                      已授权读取与写入 Time OS
+                      已授权读取与写入 AimThread
                     </p>
                   </div>
                   <form
