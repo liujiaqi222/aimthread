@@ -4,6 +4,16 @@ A personal, AI-native goal execution and time accounting system designed to help
 
 ## Language
 
+### Ownership
+
+**User**:
+An individual with a private set of Goals, Tasks, Sessions, preferences, and AI authorizations in AimThread. Different Users do not share execution data or a current execution context.
+_Avoid_: Instance owner, Team, Workspace, Tenant
+
+**Login Identity**:
+A Google or GitHub identity through which an individual accesses their AimThread User. Multiple Login Identities with the same verified email can belong to one User when both the existing User email and incoming identity email are verified.
+_Avoid_: User, Workspace, AI authorization
+
 ### Planning
 
 **Goal**:
