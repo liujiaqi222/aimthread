@@ -13,13 +13,13 @@ const inputSchema = z
 export async function PATCH(request: Request) {
   if (!isSameOriginRequest(request))
     return Response.json({ ok: false }, { status: 403 });
-  if (!(await readWebSession()))
-    return Response.json({ ok: false }, { status: 401 });
+  const context = await readWebSession();
+  if (!context) return Response.json({ ok: false }, { status: 401 });
   const input = inputSchema.safeParse(await request.json().catch(() => null));
   if (!input.success) return Response.json({ ok: false }, { status: 400 });
   const result = await settingsUpdateContract(
     settingsService,
-    { actor: "web" },
+    context,
     input.data,
   );
   return Response.json(result, { status: result.ok ? 200 : 500 });

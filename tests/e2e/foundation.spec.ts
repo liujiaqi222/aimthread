@@ -6,19 +6,18 @@ import {
   loginAndSetup,
   mcpEnvelope,
   readMcpResponse,
-  webPassword,
+  loginAs,
 } from "./helpers";
 
-test("first-run account, setup, onboarding, session persistence, and logout", async ({
+test("authenticated account, setup, onboarding, session persistence, and logout", async ({
   page,
 }) => {
   await page.goto("/today");
   await expect(page).toHaveURL(/\/login\?next=/);
 
-  await page.getByLabel("设置实例密码").fill(webPassword);
-  await page
-    .getByRole("button", { name: /(创建|保存)并进入 AimThread/ })
-    .click();
+  await expect(page.getByText("账户登录升级中")).toBeVisible();
+  await loginAs(page);
+  await page.goto("/setup");
   await expect(page).toHaveURL(/\/setup$/);
   await expect(page.getByText("数据库已就绪")).toBeVisible();
 
@@ -248,7 +247,7 @@ test("setup shows an actionable error when the schema is incomplete", async ({
     await recoveryPool.end();
   }
 
-  // The next serial test recreates its owner and baseline through
+  // The next serial test recreates its test User and baseline through
   // loginAndSetup. Avoid navigating while the dev server is still releasing
   // connections to the schema that was just replaced.
 });

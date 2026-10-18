@@ -17,6 +17,10 @@ import type { SettingsService } from "@/services/settings";
 import type { HistoryService } from "@/services/history";
 import type { StatisticsService } from "@/services/statistics";
 import {
+  goalContextQuerySchema,
+  type ExecutionReportService,
+} from "@/services/execution-report";
+import {
   goalCreateSchema,
   goalUpdateSchema,
   listSchema,
@@ -43,7 +47,7 @@ import {
 } from "@/shared/schemas/session";
 import { updateSettingsSchema } from "@/shared/schemas/settings";
 
-const context = { actor: "mcp" } as const;
+import { requireUserId, type AuthenticatedContext } from "@/auth/context";
 const oauthSecuritySchemes = [
   { type: "oauth2", scopes: [MCP_READ_SCOPE, MCP_WRITE_SCOPE] },
 ];
@@ -52,6 +56,7 @@ const readOnlyTools = new Set([
   "system_health",
   "settings_get",
   "dashboard_get",
+  "goal_context_get",
   "goals_list",
   "goal_get",
   "tasks_list",
@@ -84,16 +89,21 @@ function toolResult(result: object, error?: string) {
  * Track / Current-Next registrations are gone — Goal, Task and Session
  * hang off each other directly.
  */
-export function createAimThreadMcpServer(deps: {
-  settingsService: SettingsService;
-  planningService: PlanningService;
-  selectionService: SelectionService;
-  sessionService: SessionService;
-  distractionService: DistractionService;
-  dashboardService: DashboardService;
-  historyService: HistoryService;
-  statisticsService: StatisticsService;
-}) {
+export function createAimThreadMcpServer(
+  deps: {
+    settingsService: SettingsService;
+    planningService: PlanningService;
+    selectionService: SelectionService;
+    sessionService: SessionService;
+    distractionService: DistractionService;
+    dashboardService: DashboardService;
+    historyService: HistoryService;
+    statisticsService: StatisticsService;
+    executionReportService: ExecutionReportService;
+  },
+  context: AuthenticatedContext,
+) {
+  requireUserId(context);
   const {
     settingsService,
     planningService,
@@ -103,6 +113,7 @@ export function createAimThreadMcpServer(deps: {
     dashboardService,
     historyService,
     statisticsService,
+    executionReportService,
   } = deps;
   const server = new McpServer({ name: "aimthread", version: "0.3.0" });
 
@@ -205,6 +216,18 @@ export function createAimThreadMcpServer(deps: {
   };
 
   // ---- Execution context -------------------------------------------------
+
+  domainTool(
+    "goal_context_get",
+    {
+      title: "Get goal execution context",
+      description:
+        "Before continuing or adjusting a Goal's plan, read its latest execution context: all Tasks with estimatedMinutes, all-time effective focus seconds, context-matched resume hints, and up to 10 recent completed Sessions with notes. Includes copyable Markdown for AI. Overruns are discussion cues, not evidence of poor efficiency; unfinished Task totals are not final durations. Ask before changing plans.",
+      inputSchema: goalContextQuerySchema,
+    },
+    (input: { goalId: string }) =>
+      executionReportService.getGoalContext(context, input),
+  );
 
   domainTool(
     "dashboard_get",
@@ -323,7 +346,7 @@ export function createAimThreadMcpServer(deps: {
     {
       title: "Create tasks",
       description:
-        "Create 1–50 Tasks in order inside a Goal. Never changes the stored selection. An idempotency key makes retries safe.",
+        "Create 1–50 Tasks in order inside a Goal. Include optional estimatedMinutes for plan-vs-actual calibration; minutes are independent of timer mode and Pomodoro length. Never changes the stored selection. An idempotency key makes retries safe.",
       inputSchema: tasksCreateSchema,
     },
     (input: z.output<typeof tasksCreateSchema>) =>
@@ -556,7 +579,7 @@ export function createAimThreadMcpServer(deps: {
     {
       title: "Get focus statistics",
       description:
-        "Get today, week, month, custom (max 366 local days), or all-time totals in seconds with configured timezone/week start. goalId filters every metric. daily=true returns bounded daily seconds, distinct Session counts and currently completed Task counts; period=all returns aggregates without daily enumeration. now sets one snapshot shared with sessions_list; timezone and weekStartsOn can pin the same preference snapshot across queries. Daily Session counts must not be summed for the period count.",
+        "Get today, week, month, year, custom (max 366 local days), or all-time totals in seconds with configured timezone/week start. goalId filters every metric. daily=true returns bounded daily seconds, distinct Session counts and currently completed Task counts; period=all returns aggregates without daily enumeration. now sets one snapshot shared with sessions_list; timezone and weekStartsOn can pin the same preference snapshot across queries. Daily Session counts must not be summed for the period count.",
       inputSchema: statsQuerySchema,
     },
     (input: z.output<typeof statsQuerySchema>) =>

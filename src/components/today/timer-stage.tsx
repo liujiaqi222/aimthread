@@ -12,7 +12,7 @@ export function TimerStage({
   return (
     <div className="mt-3 flex w-full flex-col items-center gap-2 sm:mt-6 sm:gap-4">
       <div
-        className={`grid h-28 w-full shrink-0 place-items-center sm:h-[clamp(11rem,24vh,16rem)] ${className}`}
+        className={`grid min-h-28 w-full shrink-0 place-items-center sm:min-h-[clamp(11rem,24vh,16rem)] ${className}`}
       >
         {children}
       </div>

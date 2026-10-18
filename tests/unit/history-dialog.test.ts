@@ -27,6 +27,7 @@ import type { HistorySessionDetail } from "@/services/history";
 const now = new Date("2026-06-02T12:00:00Z");
 const detail: HistorySessionDetail = {
   id: "00000000-0000-4000-8000-000000000001",
+  userId: "test-user-a",
   goalId: "00000000-0000-4000-8000-000000000002",
   taskId: null,
   status: "completed",
@@ -47,6 +48,7 @@ const detail: HistorySessionDetail = {
   createdAt: now,
   updatedAt: now,
   goal: {
+    userId: "test-user-a",
     id: "00000000-0000-4000-8000-000000000002",
     title: "目标",
     description: null,
@@ -126,7 +128,11 @@ it("overlap confirmation preserves input and reuses the same submission key", as
   expect((screen.getByLabelText("笔记") as HTMLTextAreaElement).value).toBe(
     "保留这段输入",
   );
-  fireEvent.click(screen.getByRole("button", { name: "仍然保存" }));
+  const confirm = screen.getByRole("button", {
+    name: "仍然保存",
+  }) as HTMLButtonElement;
+  await waitFor(() => expect(confirm.disabled).toBe(false));
+  fireEvent.click(confirm);
   await waitFor(() => expect(logSessionAction).toHaveBeenCalledTimes(2));
   const [first, second] = vi.mocked(logSessionAction).mock.calls;
   expect(second![0]).toEqual({ ...first![0], allowOverlap: true });

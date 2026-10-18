@@ -9,7 +9,13 @@ import { LogoutButton } from "@/components/logout-button";
 import { PrimaryNav } from "@/components/primary-nav";
 import { Button } from "@/components/ui/button";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  userId,
+}: {
+  children: React.ReactNode;
+  userId: string;
+}) {
   return (
     <SessionNavigationProvider>
       <div className="min-h-screen bg-[#f5f4f0] text-stone-950">
@@ -34,7 +40,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 >
                   <Settings aria-hidden="true" />
                 </Button>
-                <LogoutButton />
+                <LogoutButton userId={userId} />
               </div>
             </div>
           </header>

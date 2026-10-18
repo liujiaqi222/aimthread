@@ -1,3 +1,4 @@
+import { requireWebSession } from "@/auth/web-session";
 import Link from "next/link";
 import { ArrowRight, ChevronDown, Plus } from "lucide-react";
 
@@ -13,13 +14,12 @@ import { planningService } from "@/services";
 import type { Goal, Task } from "@/db/schema";
 import { goalStatusLabel } from "@/shared/labels";
 
-const context = { actor: "web" } as const;
-
 export default async function GoalsPage({
   searchParams,
 }: {
   searchParams?: Promise<{ view?: string }>;
 }) {
+  const context = await requireWebSession();
   const { view } = (await searchParams) ?? {};
   const showAll = view === "all";
   const allGoals = await planningService.listGoals(context, {

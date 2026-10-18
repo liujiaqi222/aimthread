@@ -1,14 +1,81 @@
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { betterAuth } from "better-auth";
 import { jwt } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
-import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type APIRequestContext,
+  type Page,
+} from "@playwright/test";
 
 import * as authSchema from "@/db/auth-schema";
 
-export const webPassword = "correct-horse-battery-staple";
+/** Web and MCP share an identity within a test; unrelated tests never share data. */
+export function testUserId() {
+  const info = test.info();
+  return `e2e-${createHash("sha256").update(`${info.testId}:${info.retry}`).digest("hex").slice(0, 24)}`;
+}
+const testSecret = "better-auth-test-secret-that-is-at-least-32-characters";
+
+function assertTestDatabase() {
+  const namespace =
+    process.env.AIMTHREAD_TEST_SCHEMA ?? process.env.TIMEOS_TEST_SCHEMA;
+  const url = new URL(databaseUrl);
+  if (
+    !namespace?.match(/^(aimthread|timeos)_test_[a-f0-9]{32}$/) &&
+    !(
+      ["localhost", "127.0.0.1"].includes(url.hostname) &&
+      url.pathname.endsWith("_test")
+    )
+  ) {
+    throw new Error("Test identities require an isolated test database.");
+  }
+}
+
+export async function ensureTestUser(userId = testUserId()) {
+  assertTestDatabase();
+  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+  try {
+    await pool.query(
+      `insert into "user" (id,name,email,email_verified) values ($1,$1,$2,true) on conflict (id) do nothing`,
+      [userId, `${userId}@example.test`],
+    );
+  } finally {
+    await pool.end();
+  }
+}
+
+/** Test-process-only fixture: a real persisted Better Auth session and signed cookie. */
+export async function loginAs(page: Page, userId = testUserId()) {
+  await ensureTestUser(userId);
+  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+  const token = randomUUID();
+  try {
+    await pool.query(
+      `insert into "session" (id,user_id,token,expires_at,updated_at) values ($1,$2,$3,now()+interval '1 hour',now())`,
+      [randomUUID(), userId, token],
+    );
+  } finally {
+    await pool.end();
+  }
+  await page.context().clearCookies();
+  const signature = createHmac("sha256", testSecret)
+    .update(token)
+    .digest("base64");
+  await page.context().addCookies([
+    {
+      name: "better-auth.session_token",
+      value: encodeURIComponent(`${token}.${signature}`),
+      url: baseUrl,
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+}
 export const mcpEnvelope = {
   "io.modelcontextprotocol/protocolVersion": "2026-07-28",
   "io.modelcontextprotocol/clientCapabilities": {},
@@ -24,23 +91,8 @@ const databaseUrl =
   "postgresql://postgres:postgres@localhost:55432/aimthread_test";
 
 export async function loginAndSetup(page: Page) {
-  await page.goto("/login?next=/setup");
-
-  await page.locator("#password").waitFor({ state: "visible" });
-  const createPassword = page.getByLabel("设置实例密码", { exact: true });
-  if (await createPassword.isVisible()) {
-    await page.getByLabel("你的名称").fill("E2E Owner");
-    await createPassword.fill(webPassword);
-    await page.getByLabel("确认实例密码").fill(webPassword);
-    await page.getByRole("button", { name: "保存并进入 AimThread" }).click();
-  } else {
-    await page.getByLabel("实例密码", { exact: true }).fill(webPassword);
-    await page.getByRole("button", { name: "进入 AimThread" }).click();
-  }
-
-  // Use setup as the explicit login callback, so its redirect does not
-  // race a second navigation issued by the test.
-  await page.waitForURL("**/setup");
+  await loginAs(page);
+  await page.goto("/setup");
   await page.getByLabel("时区").fill("Asia/Shanghai");
   await page.getByRole("button", { name: "完成设置" }).click();
   await page.waitForURL(/\/(onboarding|today)/);
@@ -62,6 +114,12 @@ export async function loginAndSetup(page: Page) {
     await page.getByRole("button", { name: "跳过并保存目标" }).click();
     await page.waitForURL(/\/today\?first=1/);
   }
+  // A route URL can arrive before its streamed execution view is ready.
+  await expect(
+    page.getByRole("button", {
+      name: /开始第一次执行|开始 \d+ 分钟专注|开始正计时/,
+    }),
+  ).toBeVisible();
 }
 
 /**
@@ -70,7 +128,13 @@ export async function loginAndSetup(page: Page) {
  * issuer, audience, and scope checks without pretending to be ChatGPT.
  * The actual browser OAuth exchange is verified manually against ChatGPT.
  */
-export async function createMcpAccessToken(request: APIRequestContext) {
+export async function createMcpAccessToken(
+  request: APIRequestContext,
+  userId = testUserId(),
+  claims: Record<string, unknown> = {},
+  options: { audience?: string; issuer?: string; expirationTime?: string } = {},
+) {
+  await ensureTestUser(userId);
   const resourceMetadata = await request.get(
     "/.well-known/oauth-protected-resource/mcp",
   );
@@ -110,13 +174,14 @@ export async function createMcpAccessToken(request: APIRequestContext) {
         payload: {
           scope: "aimthread:read aimthread:write",
           client_id: "aimthread-e2e",
-          sub: "aimthread-e2e-owner",
+          sub: userId,
+          ...claims,
         },
         overrideOptions: {
           jwt: {
-            issuer: issuer!,
-            audience: resource.resource,
-            expirationTime: "5m",
+            issuer: options.issuer ?? issuer!,
+            audience: options.audience ?? resource.resource,
+            expirationTime: options.expirationTime ?? "5m",
           },
         },
       },

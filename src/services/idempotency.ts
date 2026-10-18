@@ -1,3 +1,4 @@
+import { requireUserId, type AuthenticatedContext } from "@/auth/context";
 import { createHash } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
@@ -40,6 +41,7 @@ export interface IdempotencyOutcome<T> {
  * When `key` is absent the operation runs unconditionally.
  */
 export async function withIdempotency<T>(options: {
+  context: AuthenticatedContext;
   tx: Transaction;
   operation: string;
   key: string | null | undefined;
@@ -47,7 +49,8 @@ export async function withIdempotency<T>(options: {
   run: () => Promise<IdempotencyOutcome<T>>;
   replay: (result: unknown) => Promise<T | null> | T | null;
 }): Promise<T> {
-  const { tx, operation, key, requestHash, run, replay } = options;
+  const { context, tx, operation, key, requestHash, run, replay } = options;
+  const userId = requireUserId(context);
 
   if (!key) {
     const { value } = await run();
@@ -56,7 +59,7 @@ export async function withIdempotency<T>(options: {
 
   const claimed = await tx
     .insert(idempotencyRecords)
-    .values({ operation, key, requestHash })
+    .values({ userId, operation, key, requestHash })
     .onConflictDoNothing()
     .returning();
 
@@ -66,6 +69,7 @@ export async function withIdempotency<T>(options: {
       .from(idempotencyRecords)
       .where(
         and(
+          eq(idempotencyRecords.userId, userId),
           eq(idempotencyRecords.operation, operation),
           eq(idempotencyRecords.key, key),
         ),
@@ -93,6 +97,7 @@ export async function withIdempotency<T>(options: {
     .set({ resultRef, result: result as never })
     .where(
       and(
+        eq(idempotencyRecords.userId, userId),
         eq(idempotencyRecords.operation, operation),
         eq(idempotencyRecords.key, key),
       ),

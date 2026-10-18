@@ -15,9 +15,12 @@ export const onboardingDraftSchema = z
 export type OnboardingStep = z.infer<typeof onboardingStepSchema>;
 export type OnboardingDraft = z.infer<typeof onboardingDraftSchema>;
 
-export function onboardingDraftStorageKey(origin: string): string {
+export function onboardingDraftStorageKey(
+  origin: string,
+  userId: string,
+): string {
   const instanceOrigin = new URL(origin).origin;
-  return `aimthread:onboarding:v1:${instanceOrigin}`;
+  return `aimthread:onboarding:v2:${instanceOrigin}:${encodeURIComponent(userId)}`;
 }
 
 export function parseOnboardingDraft(

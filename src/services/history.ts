@@ -1,3 +1,4 @@
+import { ownedBy } from "@/services/ownership";
 import {
   and,
   asc,
@@ -13,7 +14,7 @@ import {
   type SQL,
 } from "drizzle-orm";
 
-import type { AuthenticatedContext } from "@/auth/context";
+import { requireUserId, type AuthenticatedContext } from "@/auth/context";
 import type { Database } from "@/db/client";
 import {
   distractions,
@@ -169,13 +170,14 @@ export function normalizeSessionCorrection(
  */
 async function validateTarget(
   tx: Transaction,
+  context: AuthenticatedContext,
   goalId: string,
   taskId: string | null,
 ): Promise<void> {
   const [goal] = await tx
     .select({ id: goals.id })
     .from(goals)
-    .where(eq(goals.id, goalId))
+    .where(and(ownedBy(context, goals), eq(goals.id, goalId)))
     .limit(1);
   if (!goal) {
     throw new DomainError("GOAL_NOT_FOUND", "Goal was not found.", { goalId });
@@ -185,7 +187,7 @@ async function validateTarget(
   const [task] = await tx
     .select({ goalId: tasks.goalId })
     .from(tasks)
-    .where(eq(tasks.id, taskId))
+    .where(and(ownedBy(context, tasks), eq(tasks.id, taskId)))
     .limit(1);
   if (!task) {
     throw new DomainError("TASK_NOT_FOUND", "Task was not found.", { taskId });
@@ -201,6 +203,7 @@ async function validateTarget(
 
 async function ensureNoOverlap(
   tx: Transaction,
+  context: AuthenticatedContext,
   range: { startedAt: Date; endedAt: Date },
   allowOverlap: boolean,
   exceptId?: string,
@@ -228,7 +231,7 @@ async function ensureNoOverlap(
     })
     .from(sessions)
     .innerJoin(goals, eq(sessions.goalId, goals.id))
-    .where(and(...conditions))
+    .where(and(ownedBy(context, sessions), ...conditions))
     .orderBy(asc(sessions.startedAt))
     .limit(1);
 
@@ -249,8 +252,8 @@ async function ensureNoOverlap(
 
 export function createHistoryService(database: Database): HistoryService {
   return {
-    async listSessions(_context, input = {}) {
-      void _context;
+    async listSessions(context, input = {}) {
+      requireUserId(context);
       const query = parsed(sessionListSchema.safeParse(input));
       const from = query.from ? new Date(query.from) : undefined;
       const to = query.to ? new Date(query.to) : undefined;
@@ -301,7 +304,12 @@ export function createHistoryService(database: Database): HistoryService {
         .from(sessions)
         .innerJoin(goals, eq(sessions.goalId, goals.id))
         .leftJoin(tasks, eq(sessions.taskId, tasks.id))
-        .where(conditions.length ? and(...conditions) : undefined)
+        .where(
+          and(
+            ownedBy(context, sessions),
+            conditions.length ? and(...conditions) : undefined,
+          ),
+        )
         .orderBy(desc(sessions.startedAt), desc(sessions.id))
         .limit(query.limit + 1);
 
@@ -323,8 +331,8 @@ export function createHistoryService(database: Database): HistoryService {
       };
     },
 
-    async getSession(_context, id) {
-      void _context;
+    async getSession(context, id) {
+      requireUserId(context);
       const [row, distractionRows, phaseRows, intervalRows] = await Promise.all(
         [
           database
@@ -332,23 +340,38 @@ export function createHistoryService(database: Database): HistoryService {
             .from(sessions)
             .innerJoin(goals, eq(sessions.goalId, goals.id))
             .leftJoin(tasks, eq(sessions.taskId, tasks.id))
-            .where(eq(sessions.id, id))
+            .where(and(ownedBy(context, sessions), eq(sessions.id, id)))
             .limit(1),
           database
             .select()
             .from(distractions)
-            .where(eq(distractions.sessionId, id))
+            .where(
+              and(
+                ownedBy(context, distractions),
+                eq(distractions.sessionId, id),
+              ),
+            )
             .orderBy(asc(distractions.createdAt), asc(distractions.id))
             .limit(200),
           database
             .select()
             .from(sessionPhases)
-            .where(eq(sessionPhases.sessionId, id))
+            .where(
+              and(
+                ownedBy(context, sessionPhases),
+                eq(sessionPhases.sessionId, id),
+              ),
+            )
             .orderBy(asc(sessionPhases.sequence)),
           database
             .select()
             .from(focusIntervals)
-            .where(eq(focusIntervals.sessionId, id))
+            .where(
+              and(
+                ownedBy(context, focusIntervals),
+                eq(focusIntervals.sessionId, id),
+              ),
+            )
             .orderBy(asc(focusIntervals.startedAt), asc(focusIntervals.id)),
         ],
       );
@@ -389,8 +412,9 @@ export function createHistoryService(database: Database): HistoryService {
       });
 
       return database.transaction(async (tx) => {
-        await lockScope(tx, "sessions:timeline");
+        await lockScope(tx, context, "sessions:timeline");
         return withIdempotency({
+          context,
           tx,
           operation: "session_log",
           key: value.idempotencyKey,
@@ -401,16 +425,22 @@ export function createHistoryService(database: Database): HistoryService {
             const [session] = await tx
               .select()
               .from(sessions)
-              .where(eq(sessions.id, id))
+              .where(and(ownedBy(context, sessions), eq(sessions.id, id)))
               .limit(1);
             return session ?? null;
           },
           run: async () => {
-            await validateTarget(tx, value.goalId, value.taskId ?? null);
-            await ensureNoOverlap(tx, normalized, value.allowOverlap);
+            await validateTarget(
+              tx,
+              context,
+              value.goalId,
+              value.taskId ?? null,
+            );
+            await ensureNoOverlap(tx, context, normalized, value.allowOverlap);
             const [session] = await tx
               .insert(sessions)
               .values({
+                userId: context.userId,
                 goalId: value.goalId,
                 taskId: value.taskId ?? null,
                 status: "completed",
@@ -436,16 +466,16 @@ export function createHistoryService(database: Database): HistoryService {
       });
     },
 
-    async updateSession(_context, input) {
-      void _context;
+    async updateSession(context, input) {
+      requireUserId(context);
       const value = parsed(sessionUpdateSchema.safeParse(input));
       return database.transaction(async (tx) => {
-        await lockScope(tx, "sessions:timeline");
-        await lockScope(tx, `session:${value.id}`);
+        await lockScope(tx, context, "sessions:timeline");
+        await lockScope(tx, context, `session:${value.id}`);
         const [existing] = await tx
           .select()
           .from(sessions)
-          .where(eq(sessions.id, value.id))
+          .where(and(ownedBy(context, sessions), eq(sessions.id, value.id)))
           .limit(1);
         if (!existing) {
           throw new DomainError("SESSION_NOT_FOUND", "Session was not found.", {
@@ -467,7 +497,7 @@ export function createHistoryService(database: Database): HistoryService {
           );
         const taskId =
           value.taskId === undefined ? existing.taskId : value.taskId;
-        await validateTarget(tx, goalId, taskId);
+        await validateTarget(tx, context, goalId, taskId);
 
         const timeChanged =
           value.startedAt !== undefined ||
@@ -505,6 +535,7 @@ export function createHistoryService(database: Database): HistoryService {
         if (timeChanged)
           await ensureNoOverlap(
             tx,
+            context,
             normalized,
             value.allowOverlap,
             existing.id,
@@ -558,14 +589,14 @@ export function createHistoryService(database: Database): HistoryService {
             revision: existing.revision + 1,
             updatedAt: new Date(),
           })
-          .where(eq(sessions.id, existing.id))
+          .where(and(ownedBy(context, sessions), eq(sessions.id, existing.id)))
           .returning();
         return updated!;
       });
     },
 
-    async listCompletedTasks(_context, input = {}) {
-      void _context;
+    async listCompletedTasks(context, input = {}) {
+      requireUserId(context);
       const query = parsed(sessionListSchema.safeParse(input));
       const conditions: SQL[] = [eq(tasks.status, "completed")];
       if (query.now)
@@ -588,7 +619,7 @@ export function createHistoryService(database: Database): HistoryService {
         .select({ task: tasks, goal: goals })
         .from(tasks)
         .innerJoin(goals, eq(tasks.goalId, goals.id))
-        .where(and(...conditions))
+        .where(and(ownedBy(context, tasks), ...conditions))
         .orderBy(desc(tasks.completedAt), desc(tasks.id))
         .limit(query.limit + 1);
       return {
@@ -606,13 +637,18 @@ export function createHistoryService(database: Database): HistoryService {
       };
     },
 
-    async listTargets(_context) {
-      void _context;
+    async listTargets(context) {
+      requireUserId(context);
       const [goalRows, taskRows] = await Promise.all([
-        database.select().from(goals).orderBy(asc(goals.title)),
+        database
+          .select()
+          .from(goals)
+          .where(ownedBy(context, goals))
+          .orderBy(asc(goals.title)),
         database
           .select()
           .from(tasks)
+          .where(ownedBy(context, tasks))
           .orderBy(asc(tasks.goalId), asc(tasks.position)),
       ]);
       const tasksByGoal = new Map<string, Task[]>();

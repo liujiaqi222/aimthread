@@ -8,12 +8,10 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { jwt } from "better-auth/plugins";
-import { sql } from "drizzle-orm";
 
 import * as authSchema from "@/db/auth-schema";
 import { authDb } from "@/db/client";
 import { env } from "@/env";
-import { OWNER_EMAIL } from "@/auth/constants";
 import { MCP_READ_SCOPE, MCP_WRITE_SCOPE } from "@/auth/scopes";
 import { userNameSchema } from "@/shared/schemas/profile";
 
@@ -28,12 +26,7 @@ export const auth = betterAuth({
   secret: env.BETTER_AUTH_SECRET,
   database: drizzleAdapter(authDb, { provider: "pg", schema: authSchema }),
   advanced: { database: { joins: true } },
-  emailAndPassword: {
-    enabled: true,
-    minPasswordLength: 12,
-    maxPasswordLength: 128,
-    autoSignIn: true,
-  },
+  emailAndPassword: { enabled: false },
   session: {
     expiresIn: 60 * 60 * 24 * 90,
     updateAge: 60 * 60 * 24,
@@ -50,41 +43,6 @@ export const auth = betterAuth({
   telemetry: { enabled: false },
   databaseHooks: {
     user: {
-      create: {
-        before: async (user) => {
-          if (user.email !== OWNER_EMAIL) {
-            throw new APIError("BAD_REQUEST", {
-              message: "This AimThread instance accepts one owner account.",
-            });
-          }
-
-          // The fixed owner email is unique. Together with this preflight check,
-          // concurrent first-run claims fail closed at the database constraint.
-          const existing = await authDb.execute(
-            sql`select 1 from "user" limit 1`,
-          );
-          if (existing.rows.length > 0) {
-            throw new APIError("BAD_REQUEST", {
-              message: "This AimThread instance already has an owner.",
-            });
-          }
-
-          const parsed = userNameSchema.safeParse(user.name);
-          if (!parsed.success) {
-            throw new APIError("BAD_REQUEST", {
-              message: parsed.error.issues[0].message,
-            });
-          }
-
-          return {
-            data: {
-              ...user,
-              email: OWNER_EMAIL,
-              name: parsed.data,
-            },
-          };
-        },
-      },
       update: {
         before: async (user) => {
           if (user.name === undefined) return;
@@ -128,14 +86,3 @@ export const auth = betterAuth({
     nextCookies(),
   ],
 });
-
-export async function hasOwner(): Promise<boolean> {
-  try {
-    const result = await authDb.execute(sql`select 1 from "user" limit 1`);
-    return result.rows.length > 0;
-  } catch (error) {
-    // Let schema diagnostics remain actionable instead of presenting a
-    // misleading first-run account form when migrations have not run.
-    throw new Error("Better Auth schema is not ready.", { cause: error });
-  }
-}

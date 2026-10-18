@@ -1,15 +1,8 @@
 // @vitest-environment jsdom
 import { createElement } from "react";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { LoginForm } from "@/components/login-form";
 import { ProfileForm } from "@/components/profile-form";
 import { userNameSchema } from "@/shared/schemas/profile";
 import { authClient } from "@/auth/auth-client";
@@ -29,70 +22,12 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("owner profile", () => {
+describe("User profile", () => {
   it("trims names and rejects blank or oversized values", () => {
     expect(userNameSchema.parse("  小刘  ")).toBe("小刘");
     for (const name of ["", "  ", "a".repeat(41), null]) {
       expect(userNameSchema.safeParse(name).success).toBe(false);
     }
-  });
-
-  it("shows first-run fields and rejects mismatching passwords without signup", async () => {
-    render(
-      createElement(LoginForm, { returnPath: "/today", ownerExists: false }),
-    );
-    fireEvent.change(screen.getByLabelText("你的名称"), {
-      target: { value: "小刘" },
-    });
-    fireEvent.change(screen.getByLabelText("设置实例密码"), {
-      target: { value: "long-password-123" },
-    });
-    fireEvent.change(screen.getByLabelText("确认实例密码"), {
-      target: { value: "long-password-456" },
-    });
-    fireEvent.click(
-      screen.getByRole("button", { name: "保存并进入 AimThread" }),
-    );
-    await screen.findByText("两次输入的密码不一致。");
-    expect(authClient.signUp.email).not.toHaveBeenCalled();
-  });
-
-  it("passes the chosen name on signup", async () => {
-    vi.mocked(authClient.signUp.email).mockResolvedValue({
-      error: { message: "test failure" },
-      data: null,
-    } as never);
-    render(
-      createElement(LoginForm, { returnPath: "/today", ownerExists: false }),
-    );
-    fireEvent.change(screen.getByLabelText("你的名称"), {
-      target: { value: " 小刘 " },
-    });
-    for (const label of ["设置实例密码", "确认实例密码"]) {
-      fireEvent.change(screen.getByLabelText(label), {
-        target: { value: "long-password-123" },
-      });
-    }
-    fireEvent.click(
-      screen.getByRole("button", { name: "保存并进入 AimThread" }),
-    );
-    await waitFor(() =>
-      expect(authClient.signUp.email).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: "小刘",
-          password: "long-password-123",
-        }),
-      ),
-    );
-  });
-
-  it("does not offer account creation for an existing owner", () => {
-    render(
-      createElement(LoginForm, { returnPath: "/today", ownerExists: true }),
-    );
-    expect(screen.queryByLabelText("你的名称")).toBeNull();
-    expect(screen.queryByLabelText("确认实例密码")).toBeNull();
-    expect(screen.getByLabelText("实例密码")).toBeTruthy();
   });
 
   it("saves a name with Better Auth and refreshes the profile", async () => {

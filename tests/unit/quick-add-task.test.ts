@@ -34,6 +34,7 @@ const mockDashboard: DashboardData = {
   activeSession: null,
   selection: {
     goal: {
+      userId: "test-user-a",
       id: "00000000-0000-4000-8000-000000000001",
       title: "产品首页重构",
       description: null,
@@ -51,6 +52,7 @@ const mockDashboard: DashboardData = {
   goals: [
     {
       goal: {
+        userId: "test-user-a",
         id: "00000000-0000-4000-8000-000000000001",
         title: "产品首页重构",
         description: null,
@@ -183,7 +185,7 @@ describe("IdlePanel quick task add", () => {
     );
 
     const input = screen.getByPlaceholderText(
-      "给「产品首页重构」添加任务",
+      "快速添加下一步",
     ) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "整理顶部导航结构" } });
 
@@ -239,7 +241,7 @@ describe("IdlePanel quick task add", () => {
     );
 
     const input = screen.getByPlaceholderText(
-      "给「产品首页重构」添加任务",
+      "快速添加下一步",
     ) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "失败的任务" } });
 

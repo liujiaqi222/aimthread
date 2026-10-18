@@ -1,6 +1,7 @@
+import { ownedBy } from "@/services/ownership";
 import { and, asc, eq, gt, inArray, isNull, or } from "drizzle-orm";
 
-import type { AuthenticatedContext } from "@/auth/context";
+import { requireUserId, type AuthenticatedContext } from "@/auth/context";
 import type { Database } from "@/db/client";
 import { distractions, sessions, type Distraction } from "@/db/schema";
 import { DomainError } from "@/shared/domain-error";
@@ -43,13 +44,14 @@ export function createDistractionService(
   // One home for the target rule (PRD §4.5): an explicit sessionId must
   // exist; without one, the single running session is the target.
   async function resolveTargetSessionId(
+    context: AuthenticatedContext,
     sessionId?: string | null,
   ): Promise<string> {
     if (sessionId) {
       const [existing] = await database
         .select({ id: sessions.id })
         .from(sessions)
-        .where(eq(sessions.id, sessionId))
+        .where(and(ownedBy(context, sessions), eq(sessions.id, sessionId)))
         .limit(1);
       if (!existing) {
         throw new DomainError("SESSION_NOT_FOUND", "Session was not found.", {
@@ -62,7 +64,12 @@ export function createDistractionService(
     const [active] = await database
       .select({ id: sessions.id })
       .from(sessions)
-      .where(inArray(sessions.status, ["active", "paused"] as const))
+      .where(
+        and(
+          ownedBy(context, sessions),
+          inArray(sessions.status, ["active", "paused"] as const),
+        ),
+      )
       .limit(1);
     if (!active) {
       throw new DomainError(
@@ -74,11 +81,14 @@ export function createDistractionService(
   }
 
   return {
-    async createDistraction(_context, input) {
-      void _context;
+    async createDistraction(context, input) {
+      requireUserId(context);
       const value = parsed(distractionCreateSchema.safeParse(input));
 
-      const targetSessionId = await resolveTargetSessionId(value.sessionId);
+      const targetSessionId = await resolveTargetSessionId(
+        context,
+        value.sessionId,
+      );
 
       const [created] = await database
         .insert(distractions)
@@ -91,11 +101,14 @@ export function createDistractionService(
       return created!;
     },
 
-    async listDistractions(_context, input = {}) {
-      void _context;
+    async listDistractions(context, input = {}) {
+      requireUserId(context);
       const query = parsed(distractionListSchema.safeParse(input));
 
-      const targetSessionId = await resolveTargetSessionId(query.sessionId);
+      const targetSessionId = await resolveTargetSessionId(
+        context,
+        query.sessionId,
+      );
 
       const conditions = [eq(distractions.sessionId, targetSessionId)];
       if (!query.includeArchived) {
@@ -109,7 +122,12 @@ export function createDistractionService(
             createdAt: distractions.createdAt,
           })
           .from(distractions)
-          .where(eq(distractions.id, query.cursor))
+          .where(
+            and(
+              ownedBy(context, distractions),
+              eq(distractions.id, query.cursor),
+            ),
+          )
           .limit(1);
         if (!cursor || cursor.sessionId !== targetSessionId) {
           throw new DomainError(
@@ -131,13 +149,13 @@ export function createDistractionService(
       return database
         .select()
         .from(distractions)
-        .where(and(...conditions))
+        .where(and(ownedBy(context, distractions), ...conditions))
         .orderBy(asc(distractions.createdAt), asc(distractions.id))
         .limit(query.limit);
     },
 
-    async updateDistraction(_context, id, input) {
-      void _context;
+    async updateDistraction(context, id, input) {
+      requireUserId(context);
       const value = parsed(distractionUpdateInputSchema.safeParse(input));
 
       const [updated] = await database
@@ -146,7 +164,7 @@ export function createDistractionService(
           text: value.text ?? null,
           updatedAt: new Date(),
         })
-        .where(eq(distractions.id, id))
+        .where(and(ownedBy(context, distractions), eq(distractions.id, id)))
         .returning();
 
       if (!updated) {
@@ -159,8 +177,8 @@ export function createDistractionService(
       return updated;
     },
 
-    async archiveDistraction(_context, id) {
-      void _context;
+    async archiveDistraction(context, id) {
+      requireUserId(context);
       parsed(distractionArchiveSchema.safeParse({ id }));
 
       const [archived] = await database
@@ -169,7 +187,7 @@ export function createDistractionService(
           archivedAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(distractions.id, id))
+        .where(and(ownedBy(context, distractions), eq(distractions.id, id)))
         .returning();
 
       if (!archived) {

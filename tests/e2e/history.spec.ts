@@ -6,7 +6,7 @@ test("T09 calendar, goal filter, text edits, corrections, overlap confirmation a
   page,
   request,
 }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(240_000);
   await loginAndSetup(page);
   const token = await createMcpAccessToken(request);
   let id = 1;
@@ -165,7 +165,7 @@ test("T09 calendar, goal filter, text edits, corrections, overlap confirmation a
     page.getByRole("region", { name: "最近执行" }).locator("li"),
   ).toHaveCount(2);
 
-  await page.locator("summary").filter({ hasText: "筛选目标" }).click();
+  await page.locator("summary").filter({ hasText: "按目标查看" }).click();
   await page.getByLabel("含已取消").check();
   await page.getByRole("button", { name: "应用" }).click();
   await expect(

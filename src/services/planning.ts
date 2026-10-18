@@ -1,6 +1,7 @@
+import { ownedBy } from "@/services/ownership";
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 
-import type { AuthenticatedContext } from "@/auth/context";
+import { requireUserId, type AuthenticatedContext } from "@/auth/context";
 import type { Database } from "@/db/client";
 import { goals, sessions, tasks, type Goal, type Task } from "@/db/schema";
 import { DomainError } from "@/shared/domain-error";
@@ -80,6 +81,7 @@ export interface PlanningService {
 
 async function ensureNoOpenSessionUnderGoal(
   tx: Transaction,
+  context: AuthenticatedContext,
   goalId: string,
 ): Promise<void> {
   const [row] = await tx
@@ -87,6 +89,7 @@ async function ensureNoOpenSessionUnderGoal(
     .from(sessions)
     .where(
       and(
+        ownedBy(context, sessions),
         eq(sessions.goalId, goalId),
         inArray(sessions.status, ["active", "paused"] as const),
       ),
@@ -102,6 +105,7 @@ async function ensureNoOpenSessionUnderGoal(
 
 async function ensureNoOpenSessionOnTask(
   tx: Transaction,
+  context: AuthenticatedContext,
   taskId: string,
 ): Promise<void> {
   const [row] = await tx
@@ -109,6 +113,7 @@ async function ensureNoOpenSessionOnTask(
     .from(sessions)
     .where(
       and(
+        ownedBy(context, sessions),
         eq(sessions.taskId, taskId),
         inArray(sessions.status, ["active", "paused"] as const),
       ),
@@ -125,13 +130,14 @@ async function ensureNoOpenSessionOnTask(
 /** Load a Task with its Goal's status for validation. */
 async function requireTaskWithGoal(
   tx: Transaction,
+  context: AuthenticatedContext,
   id: string,
 ): Promise<{ task: Task; goal: Goal }> {
   const rows = await tx
     .select({ task: tasks, goal: goals })
     .from(tasks)
     .innerJoin(goals, eq(tasks.goalId, goals.id))
-    .where(eq(tasks.id, id))
+    .where(and(ownedBy(context, tasks), eq(tasks.id, id)))
     .limit(1);
   const row = rows[0];
   if (!row)
@@ -142,9 +148,8 @@ async function requireTaskWithGoal(
 }
 
 export function createPlanningService(database: Database): PlanningService {
-  const contextUnused = (_context: AuthenticatedContext) => void _context;
-
   async function transition(
+    context: AuthenticatedContext,
     id: string,
     status: "completed" | "skipped" | "archived",
   ): Promise<Task> {
@@ -152,9 +157,9 @@ export function createPlanningService(database: Database): PlanningService {
     return database.transaction(async (tx) => {
       // Open-Session guard and selection advance must serialize against
       // session_start — hence sessions:running first.
-      await lockScope(tx, "sessions:running");
+      await lockScope(tx, context, "sessions:running");
 
-      const { task, goal } = await requireTaskWithGoal(tx, id);
+      const { task, goal } = await requireTaskWithGoal(tx, context, id);
       if (goal.status !== "active")
         throw new DomainError(
           "GOAL_NOT_ACTIVE",
@@ -168,7 +173,7 @@ export function createPlanningService(database: Database): PlanningService {
           { taskId: id },
         );
       // A Task with an unfinished Session cannot transition (PRD §3.2).
-      await ensureNoOpenSessionOnTask(tx, id);
+      await ensureNoOpenSessionOnTask(tx, context, id);
 
       const now = new Date();
       const [affected] = await tx
@@ -178,7 +183,7 @@ export function createPlanningService(database: Database): PlanningService {
           completedAt: status === "completed" ? now : null,
           updatedAt: now,
         })
-        .where(eq(tasks.id, id))
+        .where(and(ownedBy(context, tasks), eq(tasks.id, id)))
         .returning();
       if (!affected)
         throw new DomainError("TASK_NOT_FOUND", "Task was not found.", {
@@ -192,6 +197,7 @@ export function createPlanningService(database: Database): PlanningService {
         .from(tasks)
         .where(
           and(
+            ownedBy(context, tasks),
             eq(tasks.goalId, task.goalId),
             eq(tasks.status, "pending"),
             sql`${tasks.position} > ${task.position}`,
@@ -206,6 +212,7 @@ export function createPlanningService(database: Database): PlanningService {
           .from(tasks)
           .where(
             and(
+              ownedBy(context, tasks),
               eq(tasks.goalId, task.goalId),
               eq(tasks.status, "pending"),
               ne(tasks.id, id),
@@ -215,7 +222,7 @@ export function createPlanningService(database: Database): PlanningService {
           .limit(1);
         nextTaskId = firstPending?.id ?? null;
       }
-      await advanceSelectionOnTaskTransition(tx, {
+      await advanceSelectionOnTaskTransition(tx, context, {
         goalId: task.goalId,
         taskId: id,
         nextTaskId,
@@ -227,12 +234,13 @@ export function createPlanningService(database: Database): PlanningService {
 
   return {
     async listGoals(context, input = {}) {
-      contextUnused(context);
+      requireUserId(context);
       const query = parsed(listSchema.safeParse(input));
       const status = query.status
         ? parsed(parentStatusSchema.safeParse(query.status))
         : undefined;
       return listPositionPage(database, goals, {
+        scope: [ownedBy(context, goals)],
         filters: [
           ...(status
             ? [eq(goals.status, status)]
@@ -246,11 +254,11 @@ export function createPlanningService(database: Database): PlanningService {
     },
 
     async getGoal(context, id) {
-      contextUnused(context);
+      requireUserId(context);
       const [goal] = await database
         .select()
         .from(goals)
-        .where(eq(goals.id, id))
+        .where(and(ownedBy(context, goals), eq(goals.id, id)))
         .limit(1);
       if (!goal)
         throw new DomainError("GOAL_NOT_FOUND", "Goal was not found.", {
@@ -260,15 +268,16 @@ export function createPlanningService(database: Database): PlanningService {
     },
 
     async createGoal(context, input) {
-      contextUnused(context);
+      requireUserId(context);
       const value = parsed(goalCreateSchema.safeParse(input));
       const requestHash = requestHashOf({
         title: value.title,
         description: value.description ?? null,
       });
       return database.transaction(async (tx) => {
-        await lockScope(tx, "goals:order");
+        await lockScope(tx, context, "goals:order");
         return withIdempotency({
+          context,
           tx,
           operation: "goal_create",
           key: value.idempotencyKey,
@@ -279,7 +288,7 @@ export function createPlanningService(database: Database): PlanningService {
             const [goal] = await tx
               .select()
               .from(goals)
-              .where(eq(goals.id, goalId))
+              .where(and(ownedBy(context, goals), eq(goals.id, goalId)))
               .limit(1);
             return goal ?? null;
           },
@@ -287,11 +296,13 @@ export function createPlanningService(database: Database): PlanningService {
             const [last] = await tx
               .select({ position: goals.position })
               .from(goals)
+              .where(ownedBy(context, goals))
               .orderBy(sql`${goals.position} desc`)
               .limit(1);
             const [goal] = await tx
               .insert(goals)
               .values({
+                userId: context.userId,
                 title: value.title,
                 description: value.description ?? null,
                 position: (last?.position ?? 0) + 1,
@@ -308,15 +319,15 @@ export function createPlanningService(database: Database): PlanningService {
     },
 
     async updateGoal(context, input) {
-      contextUnused(context);
+      requireUserId(context);
       const value = parsed(goalUpdateSchema.safeParse(input));
       return database.transaction(async (tx) => {
-        await lockScope(tx, "sessions:running");
-        await lockScope(tx, `goal:${value.id}`);
+        await lockScope(tx, context, "sessions:running");
+        await lockScope(tx, context, `goal:${value.id}`);
         const [existing] = await tx
           .select()
           .from(goals)
-          .where(eq(goals.id, value.id))
+          .where(and(ownedBy(context, goals), eq(goals.id, value.id)))
           .limit(1);
         if (!existing)
           throw new DomainError("GOAL_NOT_FOUND", "Goal was not found.", {
@@ -336,34 +347,39 @@ export function createPlanningService(database: Database): PlanningService {
           value.status !== "active" &&
           value.status !== existing.status
         )
-          await ensureNoOpenSessionUnderGoal(tx, value.id);
+          await ensureNoOpenSessionUnderGoal(tx, context, value.id);
         const [goal] = await tx
           .update(goals)
           .set({ ...value, id: undefined, updatedAt: new Date() })
-          .where(eq(goals.id, value.id))
+          .where(and(ownedBy(context, goals), eq(goals.id, value.id)))
           .returning();
         return goal!;
       });
     },
 
     async reorderGoals(context, ids) {
-      contextUnused(context);
+      requireUserId(context);
       const value = parsed(reorderSchema.safeParse({ ids }));
       return database.transaction(async (tx) => {
-        await lockScope(tx, "goals:order");
-        await renumberPositions(tx, goals, value.ids);
-        return tx.select().from(goals).orderBy(asc(goals.position));
+        await lockScope(tx, context, "goals:order");
+        await renumberPositions(tx, goals, value.ids, ownedBy(context, goals));
+        return tx
+          .select()
+          .from(goals)
+          .where(ownedBy(context, goals))
+          .orderBy(asc(goals.position));
       });
     },
 
     async listTasks(context, goalId, input = {}) {
-      contextUnused(context);
+      requireUserId(context);
+      await this.getGoal(context, goalId);
       const query = parsed(listSchema.safeParse(input));
       const status = query.status
         ? parsed(taskStatusSchema.safeParse(query.status))
         : undefined;
       return listPositionPage(database, tasks, {
-        scope: [eq(tasks.goalId, goalId)],
+        scope: [ownedBy(context, tasks), eq(tasks.goalId, goalId)],
         filters: [
           ...(status
             ? [eq(tasks.status, status)]
@@ -377,18 +393,18 @@ export function createPlanningService(database: Database): PlanningService {
     },
 
     async createTasks(context, input) {
-      contextUnused(context);
+      requireUserId(context);
       const value = parsed(tasksCreateSchema.safeParse(input));
       const requestHash = requestHashOf({
         goalId: value.goalId,
         tasks: value.tasks,
       });
       return database.transaction(async (tx) => {
-        await lockScope(tx, `goal:${value.goalId}`);
+        await lockScope(tx, context, `goal:${value.goalId}`);
         const [goal] = await tx
           .select()
           .from(goals)
-          .where(eq(goals.id, value.goalId))
+          .where(and(ownedBy(context, goals), eq(goals.id, value.goalId)))
           .limit(1);
         if (!goal)
           throw new DomainError("GOAL_NOT_FOUND", "Goal was not found.", {
@@ -402,6 +418,7 @@ export function createPlanningService(database: Database): PlanningService {
           );
 
         return withIdempotency({
+          context,
           tx,
           operation: "tasks_create",
           key: value.idempotencyKey,
@@ -413,14 +430,16 @@ export function createPlanningService(database: Database): PlanningService {
             return tx
               .select()
               .from(tasks)
-              .where(inArray(tasks.id, taskIds))
+              .where(and(ownedBy(context, tasks), inArray(tasks.id, taskIds)))
               .orderBy(asc(tasks.position));
           },
           run: async () => {
             const [last] = await tx
               .select({ position: tasks.position })
               .from(tasks)
-              .where(eq(tasks.goalId, value.goalId))
+              .where(
+                and(ownedBy(context, tasks), eq(tasks.goalId, value.goalId)),
+              )
               .orderBy(sql`${tasks.position} desc`)
               .limit(1);
             const created = await tx
@@ -451,11 +470,11 @@ export function createPlanningService(database: Database): PlanningService {
     },
 
     async updateTask(context, input) {
-      contextUnused(context);
+      requireUserId(context);
       const value = parsed(taskUpdateSchema.safeParse(input));
       return database.transaction(async (tx) => {
-        const { task, goal } = await requireTaskWithGoal(tx, value.id);
-        await lockScope(tx, `goal:${task.goalId}`);
+        const { task, goal } = await requireTaskWithGoal(tx, context, value.id);
+        await lockScope(tx, context, `goal:${task.goalId}`);
         if (goal.status !== "active")
           throw new DomainError(
             "GOAL_NOT_ACTIVE",
@@ -471,21 +490,21 @@ export function createPlanningService(database: Database): PlanningService {
         const [updated] = await tx
           .update(tasks)
           .set({ ...value, id: undefined, updatedAt: new Date() })
-          .where(eq(tasks.id, value.id))
+          .where(and(ownedBy(context, tasks), eq(tasks.id, value.id)))
           .returning();
         return updated!;
       });
     },
 
     async reorderTasks(context, goalId, ids) {
-      contextUnused(context);
+      requireUserId(context);
       const value = parsed(reorderSchema.safeParse({ parentId: goalId, ids }));
       return database.transaction(async (tx) => {
-        await lockScope(tx, `goal:${goalId}`);
+        await lockScope(tx, context, `goal:${goalId}`);
         const [goal] = await tx
           .select()
           .from(goals)
-          .where(eq(goals.id, goalId))
+          .where(and(ownedBy(context, goals), eq(goals.id, goalId)))
           .limit(1);
         if (!goal)
           throw new DomainError("GOAL_NOT_FOUND", "Goal was not found.", {
@@ -497,35 +516,40 @@ export function createPlanningService(database: Database): PlanningService {
             "Reactivate the Goal before reordering its Tasks.",
             { goalId },
           );
-        await renumberPositions(tx, tasks, value.ids, eq(tasks.goalId, goalId));
+        await renumberPositions(
+          tx,
+          tasks,
+          value.ids,
+          and(ownedBy(context, tasks), eq(tasks.goalId, goalId)),
+        );
         // Reordering keeps a still-valid explicit selection (PRD §3.2).
         return tx
           .select()
           .from(tasks)
-          .where(eq(tasks.goalId, goalId))
+          .where(and(ownedBy(context, tasks), eq(tasks.goalId, goalId)))
           .orderBy(asc(tasks.position));
       });
     },
 
     async completeTask(context, id) {
-      contextUnused(context);
-      return transition(id, "completed");
+      requireUserId(context);
+      return transition(context, id, "completed");
     },
     async skipTask(context, id) {
-      contextUnused(context);
-      return transition(id, "skipped");
+      requireUserId(context);
+      return transition(context, id, "skipped");
     },
     async archiveTask(context, id) {
-      contextUnused(context);
-      return transition(id, "archived");
+      requireUserId(context);
+      return transition(context, id, "archived");
     },
 
     async reopenTask(context, id) {
-      contextUnused(context);
+      requireUserId(context);
       parsed(taskTransitionSchema.safeParse({ id }));
       return database.transaction(async (tx) => {
-        const { task, goal } = await requireTaskWithGoal(tx, id);
-        await lockScope(tx, `goal:${task.goalId}`);
+        const { task, goal } = await requireTaskWithGoal(tx, context, id);
+        await lockScope(tx, context, `goal:${task.goalId}`);
         if (goal.status !== "active")
           throw new DomainError(
             "GOAL_NOT_ACTIVE",
@@ -535,7 +559,7 @@ export function createPlanningService(database: Database): PlanningService {
         const [reopened] = await tx
           .update(tasks)
           .set({ status: "pending", completedAt: null, updatedAt: new Date() })
-          .where(eq(tasks.id, id))
+          .where(and(ownedBy(context, tasks), eq(tasks.id, id)))
           .returning();
         if (!reopened)
           throw new DomainError("TASK_NOT_FOUND", "Task was not found.", {
