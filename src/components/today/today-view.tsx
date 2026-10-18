@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { EndCard } from "@/components/today/end-card";
+import { TodayTimeline } from "@/components/today/today-timeline";
 import { IdlePanel } from "@/components/today/idle-panel";
 import { RunPanel, type RunBusyAction } from "@/components/today/run-panel";
 import type { Task } from "@/db/schema";
@@ -421,6 +422,7 @@ export function TodayView({
         if (!prev.selection || prev.selection.goal.id !== goalId) return prev;
         return {
           ...prev,
+          resumeHint: null,
           selection: {
             ...prev.selection,
             task,
@@ -436,37 +438,44 @@ export function TodayView({
   const { activeSession, selection, todayStats } = dashboard;
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-5 pb-6 sm:space-y-6">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-base font-semibold tracking-normal text-[#b54b35] sm:text-lg">
-            今天
-          </h1>
-          <p className="mt-1 text-sm text-stone-500 sm:mt-2 sm:text-base">
-            {initialHeadline}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <StatChip
-            icon={<Clock3 aria-hidden="true" />}
-            label="今日投入"
-            value={formatHumanDuration(todayStats.totalFocusSeconds)}
-          />
-          <StatChip
-            key={`focus-${completionMoment}`}
-            icon={<Flame aria-hidden="true" />}
-            label="专注"
-            value={`${todayStats.sessionCount} 次`}
-            highlighted={todayStats.sessionCount > 0}
-            celebrating={completionMoment > 0}
-          />
-        </div>
-      </header>
+    <div
+      className={`mx-auto w-full max-w-5xl space-y-6 pb-6 ${activeSession && !endCard ? "focus-scene bg-background text-foreground rounded-2xl p-1 sm:p-6" : ""}`}
+    >
+      {!activeSession && (
+        <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-primary text-base font-semibold tracking-normal sm:text-lg">
+              今天
+            </h1>
+            <p className="text-muted-foreground mt-1 text-sm sm:mt-2 sm:text-base">
+              {initialHeadline}
+            </p>
+          </div>
+          <TodayTimeline />
+          {todayStats.totalFocusSeconds > 0 && (
+            <div className="flex gap-2">
+              <StatChip
+                icon={<Clock3 aria-hidden="true" />}
+                label="今日投入"
+                value={formatHumanDuration(todayStats.totalFocusSeconds)}
+              />
+              <StatChip
+                key={`focus-${completionMoment}`}
+                icon={<Flame aria-hidden="true" />}
+                label="专注"
+                value={`${todayStats.sessionCount} 次`}
+                highlighted={todayStats.sessionCount > 0}
+                celebrating={completionMoment > 0}
+              />
+            </div>
+          )}
+        </header>
+      )}
 
       {remoteNotice && (
         <div
           role="status"
-          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+          className="border-primary/30 bg-accent text-accent-foreground flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 text-sm"
         >
           <span>
             {remoteNotice.kind === "finished"
@@ -490,13 +499,13 @@ export function TodayView({
       {actionError && (
         <div
           role="alert"
-          className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          className="border-destructive/30 bg-destructive/10 text-destructive rounded-xl border p-4 text-sm"
         >
           {actionError}
         </div>
       )}
 
-      <main className="rounded-3xl bg-white p-5 sm:px-10 sm:py-8 lg:px-12">
+      <section className="py-4 sm:py-8">
         <div>
           {endCard ? (
             <EndCard
@@ -546,12 +555,12 @@ export function TodayView({
               onOptimisticSelectTask={handleOptimisticSelectTask}
             />
           ) : (
-            <p className="py-10 text-center text-sm text-stone-500">
+            <p className="text-muted-foreground py-10 text-center text-sm">
               当前没有可执行的目标，请从目标管理中重新启用或创建一个目标。
             </p>
           )}
         </div>
-      </main>
+      </section>
 
       {cancelOpen && activeSession && (
         <ConfirmationDialog
@@ -589,22 +598,20 @@ function StatChip({
   return (
     <div
       className={`flex items-center gap-2 rounded-xl border px-2.5 py-1.5 transition-[border-color,background-color,transform] ${
-        highlighted
-          ? "border-[#e8dec1] bg-[#fffdf8]"
-          : "border-stone-200 bg-white"
+        highlighted ? "border-border bg-accent" : "border-border bg-card"
       } ${celebrating ? "focus-stat-celebrate" : ""}`}
       aria-live={celebrating ? "polite" : undefined}
     >
       <span
         className={`relative flex size-5 items-center justify-center rounded-lg [&_svg]:size-3.5 ${
           highlighted
-            ? "bg-[#f4e7bd] text-[#8b6416] [&_svg]:fill-current"
-            : "bg-stone-100 text-stone-600"
+            ? "bg-accent text-primary [&_svg]:fill-current"
+            : "bg-muted text-muted-foreground"
         } ${celebrating ? "focus-flame-celebrate" : ""}`}
       >
         {celebrating && (
           <span
-            className="focus-flame-ring pointer-events-none absolute inset-0 rounded-lg border border-[#d9b95f]"
+            className="focus-flame-ring border-border pointer-events-none absolute inset-0 rounded-lg border"
             aria-hidden="true"
           />
         )}
@@ -613,14 +620,14 @@ function StatChip({
       <span className="flex min-w-0 items-baseline gap-1.5">
         <span
           className={`block text-[10px] font-medium tracking-wide ${
-            highlighted ? "text-[#8a7957]" : "text-stone-400"
+            highlighted ? "text-primary" : "text-muted-foreground"
           }`}
         >
           {label}
         </span>
         <span
           className={`block truncate text-xs font-semibold ${
-            highlighted ? "text-stone-950" : "text-stone-800"
+            highlighted ? "text-foreground" : "text-foreground"
           } ${celebrating ? "focus-count-celebrate" : ""}`}
         >
           {value}

@@ -135,6 +135,12 @@ export async function updateTaskAction(
     planningService.updateTask(context, {
       id: String(formData.get("id")),
       title: String(formData.get("title") ?? ""),
+      ...(formData.has("estimatedMinutes")
+        ? {
+            estimatedMinutes:
+              String(formData.get("estimatedMinutes") ?? "").trim() || null,
+          }
+        : {}),
     }),
   );
 

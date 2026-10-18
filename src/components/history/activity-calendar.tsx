@@ -59,11 +59,11 @@ export function ActivityCalendar({
   return (
     <section
       aria-label="活动日历"
-      className="rounded-2xl border border-stone-200 bg-white p-5 sm:p-6"
+      className="border-border bg-card rounded-2xl border p-5 sm:p-6"
     >
       <div className="mb-6 flex items-baseline justify-between gap-3">
         <h2 className="text-lg font-semibold">每一段投入，都留在这里</h2>
-        <span className="text-xs text-stone-500">最近一年</span>
+        <span className="text-muted-foreground text-xs">最近一年</span>
       </div>
       <div
         className="hidden overflow-x-auto pb-2 lg:block"
@@ -75,14 +75,14 @@ export function ActivityCalendar({
             {labels.map((label, i) => (
               <span
                 key={i}
-                className="w-[14px] overflow-visible text-[10px] whitespace-nowrap text-stone-500"
+                className="text-muted-foreground w-[14px] overflow-visible text-[10px] whitespace-nowrap"
               >
                 {label}
               </span>
             ))}
           </div>
           <div className="flex gap-2">
-            <div className="grid w-4 grid-rows-7 gap-[4px] text-[10px] leading-[14px] text-stone-400">
+            <div className="text-muted-foreground grid w-4 grid-rows-7 gap-[4px] text-[10px] leading-[14px]">
               {weekdays.map((d) => (
                 <span key={d}>{d}</span>
               ))}
@@ -112,7 +112,7 @@ export function ActivityCalendar({
             value={month}
             onValueChange={setMonth}
             options={months.map((m) => ({ value: m, label: m }))}
-            className="h-10 min-w-0 bg-white px-3"
+            className="bg-card h-10 min-w-0 px-3"
           />
           <button
             type="button"
@@ -126,7 +126,10 @@ export function ActivityCalendar({
         </div>
         <div className="grid grid-cols-7 gap-1.5">
           {weekdays.map((d) => (
-            <span key={d} className="pb-2 text-center text-xs text-stone-400">
+            <span
+              key={d}
+              className="text-muted-foreground pb-2 text-center text-xs"
+            >
               {d}
             </span>
           ))}
@@ -139,7 +142,7 @@ export function ActivityCalendar({
           {monthDays.map((d) => dayCell(d, true))}
         </div>
       </div>
-      <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-stone-500">
+      <div className="text-muted-foreground mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
         {[
           ["0 秒", 0],
           ["不足 15 分钟", 1],
@@ -155,7 +158,7 @@ export function ActivityCalendar({
           </span>
         ))}
       </div>
-      <p className="mt-3 text-xs leading-5 text-stone-500">
+      <p className="text-muted-foreground mt-3 text-xs leading-5">
         选择日期查看当天投入。一次跨日执行可以出现在两天，累计次数只算一次。
       </p>
     </section>

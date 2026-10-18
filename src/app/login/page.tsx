@@ -55,18 +55,20 @@ export default async function LoginPage({
         ? "登录已取消或未获授权。你可以重试，或选择另一个登录方式。"
         : "登录没有完成。请重试或选择另一个登录方式；从 ChatGPT 发起的连接也可以回到 ChatGPT 重新开始。";
   return (
-    <main className="grid min-h-screen place-items-center bg-[#f4f1ea] px-5 py-12">
+    <main className="bg-background grid min-h-screen place-items-center px-5 py-12">
       <div className="w-full max-w-md">
         <div className="mb-8 space-y-2">
-          <p className="font-mono text-xs tracking-[0.2em] text-stone-500 uppercase">
+          <p className="text-muted-foreground font-mono text-xs tracking-[0.2em] uppercase">
             执行系统
           </p>
-          <h1 className="text-4xl font-semibold tracking-tight text-stone-950">
+          <h1 className="text-foreground text-4xl font-semibold tracking-tight">
             AimThread
           </h1>
-          <p className="text-stone-600">记住下一步，也记住你真正投入的时间。</p>
+          <p className="text-muted-foreground">
+            记住下一步，也记住你真正投入的时间。
+          </p>
         </div>
-        <Card className="border-stone-300 bg-white/90 shadow-sm">
+        <Card className="border-border bg-card shadow-sm">
           <CardHeader>
             <CardTitle>
               {validOAuth ? "登录后继续连接 ChatGPT" : "登录或创建账户"}
@@ -79,7 +81,7 @@ export default async function LoginPage({
           </CardHeader>
           <CardContent>
             {invalidOAuth ? (
-              <p role="alert" className="text-sm leading-6 text-red-700">
+              <p role="alert" className="text-destructive text-sm leading-6">
                 这次授权请求已失效或被修改，请回到 ChatGPT 重新连接。
               </p>
             ) : (

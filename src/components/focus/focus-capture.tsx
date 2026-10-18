@@ -59,12 +59,12 @@ export function FocusCapture({
   };
 
   return (
-    <section className="mt-10 border-t border-stone-200 pt-5">
+    <section className="border-border mt-10 border-t pt-5">
       <form
         onSubmit={handleSubmit}
-        className="flex flex-col gap-2 rounded-xl border border-stone-200 bg-stone-50 p-2 sm:flex-row sm:items-center"
+        className="border-border bg-muted flex flex-col gap-2 rounded-xl border p-2 sm:flex-row sm:items-center"
       >
-        <div className="grid shrink-0 grid-cols-2 rounded-lg bg-stone-200/70 p-0.5">
+        <div className="bg-accent/70 grid shrink-0 grid-cols-2 rounded-lg p-0.5">
           <ModeButton
             active={mode === "note"}
             onClick={() => onModeChange("note")}
@@ -94,7 +94,7 @@ export function FocusCapture({
           type="submit"
           size="sm"
           variant="outline"
-          className="h-9 bg-white px-3"
+          className="bg-card h-9 px-3"
           disabled={
             (mode === "note" && !draft.trim()) ||
             (mode === "distraction" && !distractionsReady)
@@ -104,7 +104,7 @@ export function FocusCapture({
         </Button>
       </form>
 
-      <div className="mt-2 flex min-h-7 flex-wrap items-center justify-between gap-2 px-1 text-xs text-stone-400">
+      <div className="text-muted-foreground mt-2 flex min-h-7 flex-wrap items-center justify-between gap-2 px-1 text-xs">
         <span>
           {mode === "note"
             ? noteStatus === "saving"
@@ -119,7 +119,7 @@ export function FocusCapture({
             type="button"
             aria-expanded={detailsOpen}
             onClick={() => setDetailsOpen((open) => !open)}
-            className="flex items-center gap-1 font-medium text-stone-500 hover:text-stone-800"
+            className="text-muted-foreground hover:text-foreground flex items-center gap-1 font-medium"
           >
             {note.trim() && "随手记"}
             {note.trim() && distractions.list.length > 0 && " · "}
@@ -134,17 +134,17 @@ export function FocusCapture({
       </div>
 
       {detailsOpen && hasContent && (
-        <div className="mt-3 space-y-4 rounded-xl border border-stone-200 bg-white p-4 text-left">
+        <div className="border-border bg-card mt-3 space-y-4 rounded-xl border p-4 text-left">
           {note.trim() && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label
                   htmlFor="focus-note"
-                  className="text-xs font-medium text-stone-500"
+                  className="text-muted-foreground text-xs font-medium"
                 >
                   本次随手记
                 </label>
-                <span className="text-xs text-stone-400">
+                <span className="text-muted-foreground text-xs">
                   {noteStatus === "saving" && "保存中…"}
                   {noteStatus === "saved" && "已保存"}
                   {noteStatus === "error" && "保存失败"}
@@ -155,7 +155,7 @@ export function FocusCapture({
                 rows={4}
                 value={note}
                 onChange={(event) => onNoteChange(event.target.value)}
-                className="w-full resize-y rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm leading-6 focus:border-stone-400 focus:outline-hidden"
+                className="border-border bg-muted focus:border-input w-full resize-y rounded-lg border p-3 text-sm leading-6 focus:outline-hidden"
               />
             </div>
           )}
@@ -163,7 +163,7 @@ export function FocusCapture({
           {noteStatus === "conflict" && (
             <div
               role="alert"
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+              className="border-primary/30 bg-accent text-accent-foreground flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs"
             >
               <span>随手记在其他端有更新。你的输入已保留。</span>
               <span className="flex gap-2">
@@ -187,8 +187,8 @@ export function FocusCapture({
 
           {distractions.list.length > 0 && (
             <div className="space-y-2">
-              <p className="text-xs font-medium text-stone-500">打断</p>
-              <ul className="divide-y divide-stone-100 rounded-lg border border-stone-200">
+              <p className="text-muted-foreground text-xs font-medium">打断</p>
+              <ul className="divide-border border-border divide-y rounded-lg border">
                 {distractions.list.map((item) => (
                   <li
                     key={item.id}
@@ -224,14 +224,14 @@ export function FocusCapture({
                       </form>
                     ) : (
                       <>
-                        <span className="truncate text-stone-700">
+                        <span className="text-foreground truncate">
                           {item.text || "快速打断记录"}
                         </span>
                         <span className="flex shrink-0 items-center gap-1">
                           <Button
                             size="icon-xs"
                             variant="ghost"
-                            className="text-stone-400 hover:text-stone-700"
+                            className="text-muted-foreground hover:text-foreground"
                             onClick={() => distractions.beginEdit(item)}
                             aria-label="编辑打断"
                           >
@@ -240,7 +240,7 @@ export function FocusCapture({
                           <Button
                             size="icon-xs"
                             variant="ghost"
-                            className="text-stone-400 hover:text-stone-700"
+                            className="text-muted-foreground hover:text-foreground"
                             onClick={() => void distractions.archive(item.id)}
                             aria-label="归档打断"
                           >
@@ -256,7 +256,7 @@ export function FocusCapture({
           )}
 
           {distractions.error && (
-            <p role="alert" className="text-xs text-red-600">
+            <p role="alert" className="text-destructive text-xs">
               {distractions.error}
             </p>
           )}
@@ -284,8 +284,8 @@ function ModeButton({
       onClick={onClick}
       className={`flex h-8 items-center justify-center gap-1 rounded-md px-2.5 text-xs font-medium transition-colors [&_svg]:size-3.5 ${
         active
-          ? "bg-white text-stone-900 shadow-sm"
-          : "text-stone-500 hover:text-stone-800"
+          ? "bg-card text-foreground shadow-sm"
+          : "text-muted-foreground hover:text-foreground"
       }`}
     >
       {icon}

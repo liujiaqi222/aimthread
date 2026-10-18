@@ -25,10 +25,10 @@ export function FocusClock({
           ? "text-[2.75rem] sm:text-[5rem]"
           : "text-[3.5rem] sm:text-[clamp(5rem,8vw,7rem)]",
         tone === "paused"
-          ? "text-stone-400"
+          ? "text-muted-foreground"
           : tone === "idle"
-            ? "text-stone-600"
-            : "text-stone-950",
+            ? "text-muted-foreground"
+            : "text-foreground",
         className,
       )}
       style={{ fontVariantNumeric: "tabular-nums lining-nums" }}
@@ -50,7 +50,7 @@ export function FocusClock({
                   </span>
                 ))}
               </span>
-              <span className="text-center text-[10px]/3 font-medium tracking-widest text-stone-400">
+              <span className="text-muted-foreground text-center text-[10px]/3 font-medium tracking-widest">
                 {groups.length === 3
                   ? ["时", "分", "秒"][groupIndex]
                   : ["分", "秒"][groupIndex]}

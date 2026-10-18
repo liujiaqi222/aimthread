@@ -36,9 +36,9 @@ export function OAuthConsentCard({
   }
 
   return (
-    <section className="w-full max-w-lg rounded-[2rem] border border-stone-200 bg-white p-7 shadow-sm sm:p-9">
-      <div className="flex items-center gap-3 text-stone-500">
-        <div className="grid size-11 place-items-center rounded-2xl bg-stone-950 text-white">
+    <section className="border-border bg-card w-full max-w-lg rounded-2xl border p-7 shadow-sm sm:p-9">
+      <div className="text-muted-foreground flex items-center gap-3">
+        <div className="bg-primary text-primary-foreground grid size-11 place-items-center rounded-2xl">
           <ShieldCheck className="size-5" aria-hidden="true" />
         </div>
         <div>
@@ -49,16 +49,16 @@ export function OAuthConsentCard({
         </div>
       </div>
 
-      <h1 className="mt-8 text-3xl font-semibold tracking-tight text-stone-950">
+      <h1 className="text-foreground mt-8 text-3xl font-semibold tracking-tight">
         连接 {clientName}
       </h1>
-      <p className="mt-3 leading-7 text-stone-600">
+      <p className="text-muted-foreground mt-3 leading-7">
         授权后，你可以在 ChatGPT 对话中讨论目标，并在确认后让它写入当前
         AimThread 个人账户。
       </p>
 
-      <div className="mt-7 rounded-2xl bg-stone-50 p-5">
-        <p className="flex items-center gap-2 text-sm font-medium text-stone-900">
+      <div className="bg-muted mt-7 rounded-2xl p-5">
+        <p className="text-foreground flex items-center gap-2 text-sm font-medium">
           <Link2 className="size-4" aria-hidden="true" />
           此连接将能够
         </p>
@@ -66,7 +66,7 @@ export function OAuthConsentCard({
           {scopes.map((scope) => (
             <li
               key={scope}
-              className="flex items-start gap-2 text-sm text-stone-600"
+              className="text-muted-foreground flex items-start gap-2 text-sm"
             >
               <Check
                 className="mt-0.5 size-4 shrink-0 text-emerald-600"
@@ -78,13 +78,13 @@ export function OAuthConsentCard({
         </ul>
       </div>
 
-      <p className="mt-5 text-sm leading-6 text-stone-500">
+      <p className="text-muted-foreground mt-5 text-sm leading-6">
         ChatGPT
         只能访问你授权的个人账户数据。你可以稍后在设置中撤销连接；写入操作仍会在对话中由你确认。
       </p>
 
       {error && (
-        <p role="alert" className="mt-4 text-sm text-red-700">
+        <p role="alert" className="text-destructive mt-4 text-sm">
           {error}
         </p>
       )}

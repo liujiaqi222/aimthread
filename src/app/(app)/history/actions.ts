@@ -241,3 +241,22 @@ export async function getFirstExecutionFeedbackAction(id: string) {
     return { today, calendar };
   });
 }
+
+export async function getTodayTimelineAction() {
+  const context = await authorize();
+  const settings = await settingsService.get(context);
+  const now = new Date();
+  const date = localDateKey(now, settings.timezone);
+  const result = await getHistoryDayAction({
+    date,
+    timezone: settings.timezone,
+    weekStartsOn: settings.weekStartsOn,
+    now: now.toISOString(),
+  });
+  return result.ok
+    ? {
+        ok: true as const,
+        data: { ...result.data, date, timezone: settings.timezone },
+      }
+    : result;
+}

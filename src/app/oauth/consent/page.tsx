@@ -68,7 +68,7 @@ export default async function OAuthConsentPage({
     .filter(Boolean);
 
   return (
-    <main className="grid min-h-screen place-items-center bg-[#f4f1ea] px-5 py-12">
+    <main className="bg-background grid min-h-screen place-items-center px-5 py-12">
       <OAuthConsentCard
         clientName={client.client_name ?? "ChatGPT"}
         scopes={scopes}
@@ -79,15 +79,15 @@ export default async function OAuthConsentPage({
 
 function ConsentError({ message }: { message: string }) {
   return (
-    <main className="grid min-h-screen place-items-center bg-[#f4f1ea] px-5 py-12">
-      <div className="w-full max-w-md rounded-3xl border border-stone-200 bg-white p-8 shadow-sm">
-        <p className="font-mono text-xs tracking-[0.18em] text-stone-400 uppercase">
+    <main className="bg-background grid min-h-screen place-items-center px-5 py-12">
+      <div className="border-border bg-card w-full max-w-md rounded-xl border p-8 shadow-sm">
+        <p className="text-muted-foreground font-mono text-xs tracking-[0.18em] uppercase">
           AimThread · OAuth
         </p>
-        <h1 className="mt-3 text-2xl font-semibold text-stone-950">
+        <h1 className="text-foreground mt-3 text-2xl font-semibold">
           无法继续授权
         </h1>
-        <p className="mt-3 leading-7 text-stone-600">{message}</p>
+        <p className="text-muted-foreground mt-3 leading-7">{message}</p>
       </div>
     </main>
   );

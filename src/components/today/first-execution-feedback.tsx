@@ -26,9 +26,9 @@ export function FirstExecutionFeedback({ id }: { id: string }) {
   return (
     <section
       aria-label="首次执行足迹"
-      className="mt-5 rounded-2xl bg-[#edf3ee] p-4"
+      className="bg-accent mt-5 rounded-2xl p-4"
     >
-      <p className="text-sm font-medium text-[#537d61]">
+      <p className="text-primary text-sm font-medium">
         第一段投入，已经留下足迹。
       </p>
       <div className="mt-3 grid max-w-sm grid-cols-7 gap-1.5">
@@ -42,7 +42,9 @@ export function FirstExecutionFeedback({ id }: { id: string }) {
           />
         ))}
       </div>
-      <p className="mt-3 text-xs text-stone-500">最近七天 · 选择日期去看足迹</p>
+      <p className="text-muted-foreground mt-3 text-xs">
+        最近七天 · 选择日期去看足迹
+      </p>
     </section>
   );
 }

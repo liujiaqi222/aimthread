@@ -221,7 +221,7 @@ export function getLocalDayRange(
 }
 
 export function getLocalPeriodInterval(
-  period: "today" | "week" | "month",
+  period: "today" | "week" | "month" | "year",
   now: Date,
   timeZone: string,
   weekStartsOn: 0 | 1,
@@ -230,7 +230,10 @@ export function getLocalPeriodInterval(
   let startKey = key;
   let endKey = addLocalDays(key, 1);
 
-  if (period === "week") {
+  if (period === "year") {
+    startKey = `${key.slice(0, 4)}-01-01`;
+    endKey = `${Number(key.slice(0, 4)) + 1}-01-01`;
+  } else if (period === "week") {
     const [year, month, day] = key.split("-").map(Number);
     const weekday = new Date(Date.UTC(year!, month! - 1, day!)).getUTCDay();
     const daysSinceStart = (weekday - weekStartsOn + 7) % 7;

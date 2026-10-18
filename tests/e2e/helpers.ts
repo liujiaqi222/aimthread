@@ -110,14 +110,13 @@ export async function loginAndSetup(page: Page) {
 
   if (destination === "onboarding") {
     await page.getByLabel("目标标题").fill("E2E baseline goal");
-    await page.getByRole("button", { name: "继续" }).click();
-    await page.getByRole("button", { name: "跳过并保存目标" }).click();
+    await page.getByRole("button", { name: "保存目标，准备开始" }).click();
     await page.waitForURL(/\/today\?first=1/);
   }
   // A route URL can arrive before its streamed execution view is ready.
   await expect(
     page.getByRole("button", {
-      name: /开始第一次执行|开始 \d+ 分钟专注|开始正计时/,
+      name: /开始第一次执行|开始专注/,
     }),
   ).toBeVisible();
 }

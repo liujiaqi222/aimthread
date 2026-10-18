@@ -28,7 +28,7 @@ function localValue(date: Date | string, timezone: string) {
   return `${p.year}-${pad(p.month)}-${pad(p.day)}T${pad(p.hour)}:${pad(p.minute)}:${pad(p.second)}`;
 }
 const fieldClass =
-  "mt-1 w-full min-w-0 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm";
+  "mt-1 w-full min-w-0 rounded-lg border border-border bg-card px-3 py-2 text-sm";
 function errorMessage(error: SerializedDomainError) {
   if (error.code === "VERSION_CONFLICT")
     return "这条记录已在别处修改。输入仍保留，请加载最新记录后重新核对。";
@@ -185,7 +185,7 @@ export function RecordDialog({
       onClose={() => {
         if (!pending) onClose();
       }}
-      panelClassName="max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl sm:p-7"
+      panelClassName="max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-2xl bg-card p-5 shadow-xl sm:p-7"
     >
       <div className="mb-5 flex items-start justify-between gap-3">
         <h2 id="record-title" className="text-xl font-semibold">
@@ -203,7 +203,7 @@ export function RecordDialog({
       {confirmCancel ? (
         <div className="space-y-4">
           <h3 className="font-medium">取消这段执行？</h3>
-          <p className="text-sm leading-6 text-stone-600">
+          <p className="text-muted-foreground text-sm leading-6">
             取消后，这次执行的所有专注段将从首页、日历和目标汇总中排除。原记录仍可从取消审计查看，已完成的任务会保留。
           </p>
           <div className="flex gap-3">
@@ -274,7 +274,7 @@ export function RecordDialog({
                 开始于
               </label>
               {!current && (
-                <span className="text-xs text-stone-500">
+                <span className="text-muted-foreground text-xs">
                   （留空按时长计算）
                 </span>
               )}
@@ -321,7 +321,7 @@ export function RecordDialog({
               className={fieldClass}
             />
           </div>
-          <p className="text-xs leading-5 text-stone-500">
+          <p className="text-muted-foreground text-xs leading-5">
             时区：{timezone}
             。补录和时间更正按起止范围分配有效时长，不推测暂停的位置。
           </p>
@@ -375,17 +375,17 @@ export function RecordDialog({
           <div className="space-y-5">
             <div>
               <p className="font-medium break-words">{current.goal.title}</p>
-              <p className="mt-1 break-words text-stone-600">
+              <p className="text-muted-foreground mt-1 break-words">
                 {current.task?.title ?? current.intent ?? "围绕目标执行"}
               </p>
               <p className="mt-3 text-2xl font-semibold">
                 {durationLabel(current.durationSeconds ?? 0)}
               </p>
-              <p className="mt-2 text-xs text-stone-500">
+              <p className="text-muted-foreground mt-2 text-xs">
                 {time(current.startedAt)} —{" "}
                 {current.endedAt ? time(current.endedAt) : "尚未结束"}
               </p>
-              <p className="mt-2 text-xs text-stone-500">
+              <p className="text-muted-foreground mt-2 text-xs">
                 {timeBasisLabel[current.timeBasis]} ·{" "}
                 {sessionCreatedViaLabel[current.createdVia]}
                 {current.status === "cancelled" ? " · 已取消，不计入统计" : ""}
@@ -393,7 +393,7 @@ export function RecordDialog({
             </div>
             {current.note && (
               <div>
-                <h3 className="text-sm text-stone-500">笔记</h3>
+                <h3 className="text-muted-foreground text-sm">笔记</h3>
                 <p className="mt-1 text-sm break-words whitespace-pre-wrap">
                   {current.note}
                 </p>
@@ -401,14 +401,16 @@ export function RecordDialog({
             )}
             {current.resumeHint && (
               <div>
-                <h3 className="text-sm text-stone-500">下次从哪里继续</h3>
+                <h3 className="text-muted-foreground text-sm">
+                  下次从哪里继续
+                </h3>
                 <p className="mt-1 text-sm break-words whitespace-pre-wrap">
                   {current.resumeHint}
                 </p>
               </div>
             )}
             {current.timeBasis !== "observed" && (
-              <p className="rounded-xl bg-stone-50 p-3 text-sm leading-6 text-stone-600">
+              <p className="bg-muted text-muted-foreground rounded-xl p-3 text-sm leading-6">
                 {current.timeBasis === "corrected"
                   ? "这是一条更正记录。统计使用当前有效时长，原始计时仅供查阅，不重复计入。"
                   : "这是一条手动补录。有效时长按声明的时间范围分配。"}
@@ -421,7 +423,7 @@ export function RecordDialog({
                   {current.phases.filter((p) => p.kind === "focus").length}{" "}
                   段专注）
                 </summary>
-                <ol className="mt-3 space-y-2 text-sm text-stone-600">
+                <ol className="text-muted-foreground mt-3 space-y-2 text-sm">
                   {current.phases.map((p) => (
                     <li key={p.id}>
                       {phaseLabel(p.kind)} · {time(p.startedAt)}
@@ -439,7 +441,7 @@ export function RecordDialog({
                     ? "原始计时区间"
                     : "专注、休息与暂停"}
                 </summary>
-                <ol className="mt-3 space-y-2 text-sm text-stone-600">
+                <ol className="text-muted-foreground mt-3 space-y-2 text-sm">
                   {intervalRows.map((i, index) => {
                     const next = intervalRows[index + 1];
                     const end = new Date(
@@ -462,7 +464,7 @@ export function RecordDialog({
                           {time(end)}
                         </span>
                         {gap > 0 && (
-                          <p className="mt-1 text-xs text-stone-400">
+                          <p className="text-muted-foreground mt-1 text-xs">
                             {i.deadlineAt && end >= new Date(i.deadlineAt)
                               ? "到时等待"
                               : "暂停"}{" "}
@@ -509,7 +511,7 @@ export function RecordDialog({
       {error && (
         <div
           role="alert"
-          className="mt-4 rounded-xl bg-amber-50 p-4 text-sm leading-6 text-amber-900"
+          className="bg-accent text-accent-foreground mt-4 rounded-xl p-4 text-sm leading-6"
         >
           {error.code === "SESSION_TIME_OVERLAP" ? (
             <>

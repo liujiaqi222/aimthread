@@ -14,7 +14,7 @@ export default function GlobalError({
             <h1 className="text-3xl font-semibold">AimThread 暂时无法加载</h1>
             <p>请检查数据库连接后重试。如果刚部署，请确认数据库迁移已完成。</p>
             <button
-              className="rounded-lg bg-black px-4 py-2 text-white"
+              className="text-primary-foreground rounded-lg bg-black px-4 py-2"
               onClick={reset}
             >
               重试

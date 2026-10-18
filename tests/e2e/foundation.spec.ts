@@ -26,8 +26,6 @@ test("authenticated account, setup, onboarding, session persistence, and logout"
 
   await expect(page).toHaveURL(/\/onboarding$/);
   await page.getByLabel("目标标题").fill("完成 AimThread 首次验证");
-  await page.getByRole("button", { name: "继续" }).click();
-  await page.getByLabel("我最期待的是").fill("验证第一次执行链路");
   await page.getByRole("button", { name: "保存目标，准备开始" }).click();
 
   await expect(page).toHaveURL(/\/today\?first=1$/);

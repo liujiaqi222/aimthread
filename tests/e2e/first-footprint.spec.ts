@@ -9,11 +9,7 @@ test("the first saved execution lights the same real calendar and keeps zero day
   await loginAndSetup(page);
   const token = await createMcpAccessToken(request);
   await page.getByRole("button", { name: "正计时", exact: true }).click();
-  await page
-    .getByRole("button", {
-      name: /开始第一次执行|开始 \d+ 分钟专注|开始正计时/,
-    })
-    .click();
+  await page.getByRole("button", { name: /开始第一次执行|开始专注/ }).click();
   let seq = 10;
   await expect
     .poll(async () => {
@@ -35,6 +31,10 @@ test("the first saved execution lights the same real calendar and keeps zero day
   await expect(
     page.getByRole("heading", { name: "时间留下的痕迹" }),
   ).toBeVisible();
+  await page
+    .locator("summary")
+    .filter({ hasText: "活动日历与累计投入" })
+    .click();
   await expect(
     page.getByRole("button", { name: label!, exact: true }),
   ).toBeVisible();

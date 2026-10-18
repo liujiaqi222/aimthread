@@ -121,7 +121,9 @@ describe("EndCard", () => {
         ?.contains(screen.getByRole("button", { name: "回到今天" })),
     ).toBe(false);
     expect(screen.queryByText("可选")).toBeNull();
-    expect(hint.getAttribute("placeholder")).toBe("例如：先补完第二段的例子");
+    expect(hint.getAttribute("placeholder")).toBe(
+      "例如：接口已调通，下次写前端表单",
+    );
   });
 
   it("returns without a database write when the optional hint is untouched", () => {

@@ -35,7 +35,7 @@ export function DistractionRecord({ record }: { record: Distraction }) {
     });
   }
   return (
-    <li className="rounded-xl bg-stone-50 p-3 text-sm">
+    <li className="bg-muted rounded-xl p-3 text-sm">
       {editing ? (
         <label className="block">
           打断内容
@@ -45,7 +45,7 @@ export function DistractionRecord({ record }: { record: Distraction }) {
             maxLength={10000}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            className="mt-2 w-full rounded-lg border bg-white p-2"
+            className="bg-card mt-2 w-full rounded-lg border p-2"
           />
         </label>
       ) : (
@@ -97,7 +97,7 @@ export function DistractionRecord({ record }: { record: Distraction }) {
         </div>
       )}
       {error && (
-        <p role="alert" className="mt-2 text-xs text-amber-900">
+        <p role="alert" className="text-accent-foreground mt-2 text-xs">
           保存失败，输入仍保留，可重试。
         </p>
       )}

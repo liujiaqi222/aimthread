@@ -41,7 +41,7 @@ export function SoundToggle({
               aria-label="到时提示音"
               aria-pressed={enabled}
               disabled={saving}
-              className={enabled ? "text-[#b54b35]" : "text-stone-400"}
+              className={enabled ? "text-primary" : "text-muted-foreground"}
               onClick={async () => {
                 const next = !enabled;
                 if (next) unlockTimerSound();
@@ -81,7 +81,7 @@ export function SoundToggle({
         </TooltipContent>
       </Tooltip>
       {error && (
-        <span role="alert" className="text-xs text-red-700">
+        <span role="alert" className="text-destructive text-xs">
           提示音设置未保存，请重试。
         </span>
       )}

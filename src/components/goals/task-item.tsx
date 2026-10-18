@@ -23,14 +23,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Task } from "@/db/schema";
 import { taskStatusLabel } from "@/shared/labels";
+import { effortComparison } from "@/shared/execution-report";
 
 function TaskEditor({
   task,
   onCancel,
 }: {
-  task: Pick<Task, "id" | "title">;
+  task: Pick<Task, "id" | "title" | "estimatedMinutes">;
   onCancel: () => void;
 }) {
+  const [title, setTitle] = useState(task.title);
+  const [estimate, setEstimate] = useState(
+    task.estimatedMinutes == null ? "" : String(task.estimatedMinutes),
+  );
   const [state, formAction, pending] = useActionState<
     PlanningStatusState,
     FormData
@@ -50,11 +55,12 @@ function TaskEditor({
         <Input
           id={`edit-task-${task.id}`}
           name="title"
-          defaultValue={task.title}
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
           required
           maxLength={500}
           autoFocus
-          className="h-9 flex-1 border-stone-300 bg-white"
+          className="border-input bg-card h-9 flex-1"
         />
         <Button type="submit" size="sm" disabled={pending}>
           <Check aria-hidden="true" />
@@ -71,8 +77,28 @@ function TaskEditor({
           <X aria-hidden="true" />
         </Button>
       </div>
+      <div className="flex items-center gap-2">
+        <label
+          htmlFor={`estimate-task-${task.id}`}
+          className="text-muted-foreground text-xs"
+        >
+          预计分钟数
+        </label>
+        <Input
+          id={`estimate-task-${task.id}`}
+          name="estimatedMinutes"
+          type="number"
+          min={1}
+          max={100_000}
+          step={1}
+          value={estimate}
+          onChange={(event) => setEstimate(event.target.value)}
+          placeholder="可不填"
+          className="bg-card h-8 w-28"
+        />
+      </div>
       {state?.status === "error" && (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-destructive text-xs">
           {state.message}
         </p>
       )}
@@ -87,7 +113,13 @@ const statusIcon = {
   archived: Archive,
 } as const;
 
-export function TaskItem({ task }: { task: Task }) {
+export function TaskItem({
+  task,
+  focusSeconds = 0,
+}: {
+  task: Task;
+  focusSeconds?: number;
+}) {
   const [editing, setEditing] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
   const removeTitleId = useId();
@@ -100,12 +132,14 @@ export function TaskItem({ task }: { task: Task }) {
     task.status === "archived" ? "已移除" : taskStatusLabel[task.status];
 
   return (
-    <li className="group/task border-b border-stone-100 last:border-b-0">
+    <li className="group/task border-border border-b last:border-b-0">
       <div className="grid min-h-14 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-1 py-2.5 sm:flex sm:flex-wrap sm:px-2">
         <StatusIcon
           aria-hidden="true"
           className={`size-4 shrink-0 ${
-            task.status === "pending" ? "text-stone-400" : "text-stone-300"
+            task.status === "pending"
+              ? "text-muted-foreground"
+              : "text-muted-foreground"
           }`}
         />
 
@@ -117,17 +151,15 @@ export function TaskItem({ task }: { task: Task }) {
               <p
                 className={`truncate text-sm font-medium ${
                   task.status === "pending"
-                    ? "text-stone-800"
-                    : "text-stone-400 line-through decoration-stone-300"
+                    ? "text-foreground"
+                    : "text-muted-foreground decoration-border line-through"
                 }`}
               >
                 {task.title}
               </p>
-              <p className="mt-0.5 text-xs text-stone-400">
+              <p className="text-muted-foreground mt-0.5 text-xs">
                 {statusLabel}
-                {task.estimatedMinutes
-                  ? ` · 预计 ${task.estimatedMinutes} 分钟`
-                  : ""}
+                {` · ${effortComparison({ ...task, focusSeconds, resumeHint: null })}`}
               </p>
             </>
           )}
@@ -153,12 +185,12 @@ export function TaskItem({ task }: { task: Task }) {
                   icon="skip"
                   variant="ghost"
                 />
-                <span className="mx-1 hidden h-4 w-px bg-stone-200 sm:block" />
+                <span className="bg-accent mx-1 hidden h-4 w-px sm:block" />
                 <Button
                   type="button"
                   size="xs"
                   variant="ghost"
-                  className="text-stone-500"
+                  className="text-muted-foreground"
                   onClick={() => setEditing(true)}
                 >
                   <Pencil aria-hidden="true" />
@@ -172,7 +204,7 @@ export function TaskItem({ task }: { task: Task }) {
                     type="button"
                     size="xs"
                     variant="ghost"
-                    className="text-stone-400 hover:text-red-700"
+                    className="text-muted-foreground hover:text-destructive"
                     onClick={() => setRemoveOpen(true)}
                   >
                     <Trash2 aria-hidden="true" />

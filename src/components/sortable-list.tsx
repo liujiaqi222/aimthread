@@ -48,9 +48,9 @@ export function SortableList({
   return (
     <section
       aria-label={label}
-      className="rounded-xl border border-stone-200 bg-white/60 p-3"
+      className="border-border bg-card/60 rounded-xl border p-3"
     >
-      <div className="mb-2 flex items-center justify-between text-xs font-medium tracking-wide text-stone-500 uppercase">
+      <div className="text-muted-foreground mb-2 flex items-center justify-between text-xs font-medium tracking-wide uppercase">
         <span>{label}</span>
         {pending && (
           <LoaderCircle
@@ -63,7 +63,7 @@ export function SortableList({
         {ordered.map((item, index) => (
           <div
             key={item.id}
-            className="inline-flex overflow-hidden rounded-lg border bg-white shadow-sm"
+            className="bg-card inline-flex overflow-hidden rounded-lg border shadow-sm"
           >
             <button
               type="button"
@@ -74,7 +74,7 @@ export function SortableList({
               className="inline-flex items-center gap-1 px-2 py-1.5 text-sm"
             >
               <GripVertical
-                className="size-3.5 text-stone-400"
+                className="text-muted-foreground size-3.5"
                 aria-hidden="true"
               />
               {item.label}
@@ -84,7 +84,7 @@ export function SortableList({
               aria-label={`${item.label} 上移`}
               disabled={pending || index === 0}
               onClick={() => move(item.id, -1)}
-              className="border-l px-1.5 text-stone-500 disabled:opacity-25"
+              className="text-muted-foreground border-l px-1.5 disabled:opacity-25"
             >
               <ArrowLeft className="size-3" />
             </button>
@@ -93,7 +93,7 @@ export function SortableList({
               aria-label={`${item.label} 下移`}
               disabled={pending || index === ordered.length - 1}
               onClick={() => move(item.id, 1)}
-              className="border-l px-1.5 text-stone-500 disabled:opacity-25"
+              className="text-muted-foreground border-l px-1.5 disabled:opacity-25"
             >
               <ArrowRight className="size-3" />
             </button>

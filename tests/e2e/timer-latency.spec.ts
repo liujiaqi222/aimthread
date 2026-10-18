@@ -31,7 +31,7 @@ test("measure Neon timer click-to-render latency", async ({
     );
     const started = performance.now();
     const startButton = page.getByRole("button", {
-      name: /开始第一次执行|开始 \d+ 分钟专注|开始正计时/,
+      name: /开始第一次执行|开始专注/,
     });
     await startButton.evaluate((button) =>
       button.addEventListener(

@@ -46,7 +46,7 @@ export function HistorySelect({
         id={id}
         aria-label={label}
 
-        className={className ?? "mt-1 h-10 w-full min-w-0 bg-white px-3"}
+        className={className ?? "bg-card mt-1 h-10 w-full min-w-0 px-3"}
       >
         <SelectValue />
       </SelectTrigger>
