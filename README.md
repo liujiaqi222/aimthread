@@ -21,7 +21,9 @@ pnpm db:seed --user-id=YOUR_USER_ID
 pnpm dev
 ```
 
-`pnpm db:migrate` 使用已提交的 Drizzle migrations 建库；`pnpm db:seed` 仅允许连接 localhost/127.0.0.1，必须显式传入已存在 User 的 ID，并在该用户已有目标时默认跳过。v0.3 使用全新的 Goal → Task/Session 数据结构，不会自动转换旧版 Track 数据；用户归属迁移 `0005_user_ownership` 要求空数据库：发现旧用户或业务数据会拒绝执行，不清理、不回填，也不使用默认用户。请在计划切换时另行配置新库。
+`pnpm db:migrate` 使用已提交的 Drizzle migrations 建库；`pnpm db:seed` 仅允许连接 localhost/127.0.0.1，必须显式传入已存在 User 的 ID，并在该用户已有目标时默认跳过。v0.3 使用全新的 Goal → Task/Session 数据结构，不会自动转换旧版 Track 数据；用户归属迁移 `0005_user_ownership` 要求空数据库，发现旧用户或业务数据会拒绝执行，不回填，也不使用默认用户。
+
+项目尚未上线，旧测试数据无需保留，可以清空现有开发库后运行 `pnpm db:migrate`，无需另建数据库。若重建全部应用表，也需同时清空 Drizzle 迁移记录，让初始化从第一条迁移开始。清空会移除旧用户、业务数据、登录会话、签名密钥和 AI 授权；普通 `db:migrate` 不会自动执行清理。
 
 环境变量：
 
