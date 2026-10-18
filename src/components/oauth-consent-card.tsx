@@ -54,7 +54,7 @@ export function OAuthConsentCard({
       </h1>
       <p className="mt-3 leading-7 text-stone-600">
         授权后，你可以在 ChatGPT 对话中讨论目标，并在确认后让它写入当前
-        AimThread 实例。
+        AimThread 个人账户。
       </p>
 
       <div className="mt-7 rounded-2xl bg-stone-50 p-5">
@@ -80,7 +80,7 @@ export function OAuthConsentCard({
 
       <p className="mt-5 text-sm leading-6 text-stone-500">
         ChatGPT
-        不会获得你的实例密码。你可以稍后在设置中撤销连接；写入操作仍会在对话中由你确认。
+        只能访问你授权的个人账户数据。你可以稍后在设置中撤销连接；写入操作仍会在对话中由你确认。
       </p>
 
       {error && (

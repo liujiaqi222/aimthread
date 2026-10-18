@@ -11,8 +11,6 @@ const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 vi.mock("@/auth/auth-client", () => ({
   authClient: {
-    signIn: { email: vi.fn() },
-    signUp: { email: vi.fn() },
     updateUser: vi.fn(),
   },
 }));
@@ -35,7 +33,7 @@ describe("User profile", () => {
       data: { status: true },
       error: null,
     } as never);
-    render(createElement(ProfileForm, { name: "AimThread Owner" }));
+    render(createElement(ProfileForm, { name: "AimThread 用户" }));
     fireEvent.change(screen.getByLabelText("你的名称"), {
       target: { value: " 小刘 " },
     });

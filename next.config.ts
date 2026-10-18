@@ -8,6 +8,17 @@ const isIsolated =
 const nextConfig: NextConfig = {
   ...(isIsolated ? { distDir: `.next-tests/${testSchema}` } : {}),
   allowedDevOrigins: ["127.0.0.1"],
+  // OAuth callback URLs contain short-lived codes and signed authorization
+  // context. Keep them out of Next's development request logs too.
+  logging: {
+    incomingRequests: {
+      ignore: [
+        /^\/api\/auth(?:\/|\?)/,
+        /^\/login(?:\?|$)/,
+        /^\/oauth\/consent(?:\?|$)/,
+      ],
+    },
+  },
   reactCompiler: true,
 };
 

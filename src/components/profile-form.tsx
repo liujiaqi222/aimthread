@@ -60,7 +60,7 @@ export function ProfileForm({ name }: { name: string }) {
           }}
         />
         <p className="text-sm text-stone-500">
-          名称仅用于显示，不是登录账号；仍然使用实例密码登录。
+          名称仅用于显示；登录时继续使用你的 Google 或 GitHub 账户。
         </p>
         <FieldError>{error}</FieldError>
       </Field>

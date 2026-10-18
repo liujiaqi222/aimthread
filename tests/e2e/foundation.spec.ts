@@ -15,7 +15,7 @@ test("authenticated account, setup, onboarding, session persistence, and logout"
   await page.goto("/today");
   await expect(page).toHaveURL(/\/login\?next=/);
 
-  await expect(page.getByText("账户登录升级中")).toBeVisible();
+  await expect(page.getByText("登录或创建账户")).toBeVisible();
   await loginAs(page);
   await page.goto("/setup");
   await expect(page).toHaveURL(/\/setup$/);

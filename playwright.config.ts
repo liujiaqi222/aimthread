@@ -23,6 +23,12 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI && !testSchema,
     timeout: 120_000,
     env: {
+      // Only the isolated test server replaces third-party provider networks.
+      NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import "${process.cwd()}/tests/fixtures/oauth-provider.mjs"`,
+      GOOGLE_CLIENT_ID: "isolated-google-client",
+      GOOGLE_CLIENT_SECRET: "isolated-google-secret",
+      GITHUB_CLIENT_ID: "isolated-github-client",
+      GITHUB_CLIENT_SECRET: "isolated-github-secret",
       DATABASE_URL:
         process.env.TEST_DATABASE_URL ??
         "postgresql://postgres:postgres@localhost:55432/aimthread_test",

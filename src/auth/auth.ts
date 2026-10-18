@@ -1,88 +1,28 @@
 import "server-only";
 
-import { cimd } from "@better-auth/cimd";
-import { fetchClientMetadataResource } from "@better-auth/cimd/node";
-import { mcp } from "@better-auth/mcp";
-import { APIError } from "better-auth/api";
-import { betterAuth } from "better-auth";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { nextCookies } from "better-auth/next-js";
-import { jwt } from "better-auth/plugins";
-
-import * as authSchema from "@/db/auth-schema";
+import { createAimThreadAuth } from "@/auth/create-auth";
 import { authDb } from "@/db/client";
 import { env } from "@/env";
-import { MCP_READ_SCOPE, MCP_WRITE_SCOPE } from "@/auth/scopes";
-import { userNameSchema } from "@/shared/schemas/profile";
 
 export { MCP_READ_SCOPE, MCP_WRITE_SCOPE } from "@/auth/scopes";
+export const MCP_RESOURCE = new URL("/mcp", env.BETTER_AUTH_URL).toString();
 
-const appOrigin = new URL(env.BETTER_AUTH_URL).origin;
-export const MCP_RESOURCE = new URL("/mcp", appOrigin).toString();
-
-export const auth = betterAuth({
-  appName: "AimThread",
-  baseURL: appOrigin,
+export const auth = createAimThreadAuth({
+  database: authDb,
+  origin: env.BETTER_AUTH_URL,
   secret: env.BETTER_AUTH_SECRET,
-  database: drizzleAdapter(authDb, { provider: "pg", schema: authSchema }),
-  advanced: { database: { joins: true } },
-  emailAndPassword: { enabled: false },
-  session: {
-    expiresIn: 60 * 60 * 24 * 90,
-    updateAge: 60 * 60 * 24,
-    // Verify a short-lived encrypted cookie locally instead of querying Neon
-    // for the session and user on every timer command. Revocation is rechecked
-    // after at most 30 seconds; sign-out clears this browser's cache immediately.
-    cookieCache: {
-      enabled: true,
-      maxAge: 30,
-      strategy: "jwe",
-    },
-  },
-  trustedOrigins: [appOrigin],
-  telemetry: { enabled: false },
-  databaseHooks: {
-    user: {
-      update: {
-        before: async (user) => {
-          if (user.name === undefined) return;
-          const parsed = userNameSchema.safeParse(user.name);
-          if (!parsed.success) {
-            throw new APIError("BAD_REQUEST", {
-              message: parsed.error.issues[0].message,
-            });
-          }
-          return { data: { ...user, name: parsed.data } };
-        },
-      },
-    },
-  },
-  plugins: [
-    // Web requests only need the session. Automatic JWT header generation
-    // queries the signing key on every getSession, even on a cookie-cache hit.
-    // MCP/OAuth still use the JWT plugin's explicit signing and JWKS endpoints.
-    jwt({ disableSettingJwtHeader: true }),
-    mcp({
-      loginPage: "/login",
-      consentPage: "/oauth/consent",
-      resource: MCP_RESOURCE,
-      scopes: ["offline_access", MCP_READ_SCOPE, MCP_WRITE_SCOPE],
-      resources: [
-        {
-          identifier: MCP_RESOURCE,
-          allowedScopes: [MCP_READ_SCOPE, MCP_WRITE_SCOPE],
-          accessTokenTtl: 60 * 60,
-        },
-      ],
-    }),
-    cimd({
-      fetchClientMetadataResource,
-      metadataProfile: "mcp-2026-07-28",
-      isMetadataDocumentUrlAllowed(clientIdUrl) {
-        return new URL(clientIdUrl).hostname === "chatgpt.com";
-      },
-    }),
-    // Required for auth.api calls made from Next.js Server Actions.
-    nextCookies(),
-  ],
+  google:
+    env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+      ? {
+          clientId: env.GOOGLE_CLIENT_ID,
+          clientSecret: env.GOOGLE_CLIENT_SECRET,
+        }
+      : undefined,
+  github:
+    env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET
+      ? {
+          clientId: env.GITHUB_CLIENT_ID,
+          clientSecret: env.GITHUB_CLIENT_SECRET,
+        }
+      : undefined,
 });

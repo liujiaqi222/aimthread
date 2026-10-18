@@ -10,6 +10,10 @@ const postgresqlUrl = z.url().refine(
 
 export const serverEnvironmentSchema = z.object({
   DATABASE_URL: postgresqlUrl,
+  GOOGLE_CLIENT_ID: z.string().trim().min(1).optional(),
+  GOOGLE_CLIENT_SECRET: z.string().trim().min(1).optional(),
+  GITHUB_CLIENT_ID: z.string().trim().min(1).optional(),
+  GITHUB_CLIENT_SECRET: z.string().trim().min(1).optional(),
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.url().refine((value) => {
     const url = new URL(value);

@@ -56,7 +56,13 @@ export const account = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").notNull(),
   },
-  (table) => [index("account_userId_idx").on(table.userId)],
+  (table) => [
+    index("account_userId_idx").on(table.userId),
+    uniqueIndex("account_provider_identity_unique").on(
+      table.providerId,
+      table.accountId,
+    ),
+  ],
 );
 
 // Better Auth's native joins load session + user and user + accounts in one
