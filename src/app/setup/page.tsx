@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { CheckCircle2, Database } from "lucide-react";
+import { Database } from "lucide-react";
 
 import { readWebSession } from "@/auth/web-session";
 import { SettingsForm } from "@/components/settings-form";
@@ -33,24 +33,19 @@ export default async function SetupPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f4f1ea] px-5 py-12">
+    <main className="bg-background min-h-screen px-5 py-12">
       <div className="mx-auto max-w-3xl space-y-8">
         <header className="space-y-3">
-          <p className="font-mono text-xs tracking-[0.2em] text-stone-500 uppercase">
+          <p className="text-muted-foreground font-mono text-xs tracking-[0.2em] uppercase">
             首次配置
           </p>
           <h1 className="text-4xl font-semibold tracking-tight">
-            设置你的执行环境
+            确认时间设置
           </h1>
-          <p className="max-w-2xl text-stone-600">
-            数据库已连接。确认时间设置，然后建立第一个真正想推进的目标。
+          <p className="text-muted-foreground max-w-2xl">
+            使用你所在的时区记录投入。之后可以在设置中调整。
           </p>
         </header>
-        <Alert>
-          <CheckCircle2 aria-hidden="true" />
-          <AlertTitle>数据库已就绪</AlertTitle>
-          <AlertDescription>连接与数据库迁移检查通过。</AlertDescription>
-        </Alert>
         <Card className="max-w-xl">
           <CardHeader>
             <CardTitle>时间设置</CardTitle>

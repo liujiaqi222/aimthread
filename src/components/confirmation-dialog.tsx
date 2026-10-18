@@ -34,19 +34,21 @@ export function ConfirmationDialog({
         if (!pending) onClose();
       }}
       labelledBy={titleId}
-      panelClassName="w-full max-w-md space-y-5 rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl"
+      panelClassName="w-full max-w-md space-y-5 rounded-2xl border border-border bg-card p-6 shadow-2xl"
     >
       <div className="space-y-2">
-        <h2 id={titleId} className="text-xl font-semibold text-stone-900">
+        <h2 id={titleId} className="text-foreground text-xl font-semibold">
           {title}
         </h2>
-        <div className="text-sm leading-6 text-stone-600">{description}</div>
+        <div className="text-muted-foreground text-sm leading-6">
+          {description}
+        </div>
       </div>
 
       {error && (
         <p
           role="alert"
-          className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+          className="border-primary/30 bg-accent text-accent-foreground rounded-xl border px-3 py-2 text-sm"
         >
           {error}
         </p>
@@ -68,7 +70,7 @@ export function ConfirmationDialog({
           onClick={onConfirm}
           className={
             tone === "danger"
-              ? "border-red-200 text-red-700 hover:bg-red-50"
+              ? "border-destructive/30 text-destructive hover:bg-destructive/10"
               : undefined
           }
         >

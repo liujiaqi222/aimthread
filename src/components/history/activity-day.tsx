@@ -3,12 +3,12 @@ import type { DailyStatistics } from "@/services/statistics";
 import { durationLabel } from "@/shared/duration-label";
 export function activityTone(seconds: number) {
   return seconds === 0
-    ? "bg-stone-100"
+    ? "bg-muted"
     : seconds < 900
-      ? "bg-[#d4e2d6]"
+      ? "bg-accent"
       : seconds < 3600
-        ? "bg-[#94b29c]"
-        : "bg-[#537d61]";
+        ? "bg-accent"
+        : "bg-primary";
 }
 export function ActivityDay({
   day,
@@ -30,7 +30,7 @@ export function ActivityDay({
       title={label}
       aria-label={label}
       onClick={onSelect}
-      className={`${large ? "flex aspect-square min-h-10 flex-col items-center justify-center rounded-lg text-sm" : "h-[14px] w-[14px] rounded-[3px]"} ${future ? "bg-stone-100 text-stone-400" : activityTone(day.focusSeconds)} ${day.focusSeconds >= 3600 ? "text-white" : "text-stone-700"} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#537d61] disabled:cursor-default`}
+      className={`${large ? "flex aspect-square min-h-10 flex-col items-center justify-center rounded-lg text-sm" : "h-[14px] w-[14px] rounded-[3px]"} ${future ? "bg-muted text-muted-foreground" : activityTone(day.focusSeconds)} ${day.focusSeconds >= 3600 ? "text-primary-foreground" : "text-foreground"} focus-visible:outline-primary focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-default`}
     >
       {large && (
         <>

@@ -171,7 +171,7 @@ describe("PhaseProgress", () => {
     expect(triggers[2]?.className).toContain("shadow-[0_0_0_3px");
     const innerDot2 = triggers[2]?.querySelector("span");
     expect(innerDot2?.className).toContain("opacity-25");
-    expect(innerDot2?.className).toContain("bg-[#d85c41]");
+    expect(innerDot2?.className).toContain("bg-primary");
     expect(triggers[2]?.getAttribute("aria-current")).toBe("step");
     expect(triggers[2]?.getAttribute("aria-label")).toContain("第 2 轮专注");
     expect(triggers[2]?.getAttribute("aria-label")).toContain("待开始");

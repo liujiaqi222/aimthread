@@ -9,19 +9,19 @@ import {
 
 export const phaseColors = {
   focus: {
-    dot: "bg-[#d85c41]",
-    surface: "bg-[#fdf0ea]",
-    text: "text-[#b54b35]",
+    dot: "bg-primary",
+    surface: "bg-accent",
+    text: "text-primary",
   },
   short_break: {
-    dot: "bg-[#70917b]",
-    surface: "bg-[#edf3ee]",
-    text: "text-[#4f705a]",
+    dot: "bg-primary",
+    surface: "bg-accent",
+    text: "text-primary",
   },
   long_break: {
-    dot: "bg-[#b49350]",
-    surface: "bg-[#faf2df]",
-    text: "text-[#8b6b2f]",
+    dot: "bg-primary",
+    surface: "bg-accent",
+    text: "text-primary",
   },
 };
 
@@ -46,13 +46,7 @@ export function PhaseProgress({
         ...phases.map((p) => ({
           kind: p.kind,
           minutes:
-            settings[
-              p.kind === "focus"
-                ? "focusMinutes"
-                : p.kind === "long_break"
-                  ? "longBreakMinutes"
-                  : "shortBreakMinutes"
-            ],
+            settings[p.kind === "focus" ? "focusMinutes" : "shortBreakMinutes"],
           id: p.id,
           complete: p.complete,
           ended:

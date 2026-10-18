@@ -93,7 +93,7 @@ export function LoginForm({
             required
             autoFocus
           />
-          <p className="text-sm text-stone-500">
+          <p className="text-muted-foreground text-sm">
             怎么称呼你？以后可以在设置中修改。
           </p>
         </Field>
@@ -114,7 +114,7 @@ export function LoginForm({
           aria-invalid={Boolean(error)}
         />
         {!ownerExists && (
-          <p className="text-sm text-stone-500">
+          <p className="text-muted-foreground text-sm">
             至少 12 个字符，不会明文保存，请妥善记住。
           </p>
         )}

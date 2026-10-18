@@ -138,6 +138,10 @@ function taskFromJson(row: JsonRecord | null): Task | null {
     description: row.description == null ? null : String(row.description),
     status: row.status as Task["status"],
     position: Number(row.position),
+    initialEstimatedMinutes:
+      row.initial_estimated_minutes == null
+        ? null
+        : Number(row.initial_estimated_minutes),
     estimatedMinutes:
       row.estimated_minutes == null ? null : Number(row.estimated_minutes),
     resourceType:
@@ -792,14 +796,11 @@ export function createSessionService(
           )
       ), next_kind as materialized (
         select t.*, case when ${value.action}::text = 'start_next_focus' then 'focus'
-          when (t.timer_config->>'longBreakEnabled')::boolean and
-            (select count(*) from session_phases p where p.session_id = t.id and p.kind = 'focus'
-              and (p.complete or p.id = cp.id and cp.paused_at is null and cp.deadline_at <= ${now})) % 4 = 0
-            then 'long_break' else 'short_break' end::focus_phase as kind
+          else 'short_break' end::focus_phase as kind
         from target t, current_phase cp
       ), next_duration as materialized (
         select t.*, (t.timer_config->>case when kind = 'focus' then 'focusMinutes'
-          when kind = 'long_break' then 'longBreakMinutes' else 'shortBreakMinutes' end)::integer * 60000 as ms
+          else 'shortBreakMinutes' end)::integer * 60000 as ms
         from next_kind t
       ), opened_phase as (
         insert into session_phases (session_id, kind, sequence, started_at, deadline_at, remaining_ms)

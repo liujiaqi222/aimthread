@@ -31,6 +31,10 @@ test("the first saved execution lights the same real calendar and keeps zero day
   await expect(
     page.getByRole("heading", { name: "时间留下的痕迹" }),
   ).toBeVisible();
+  await page
+    .locator("summary")
+    .filter({ hasText: "活动日历与累计投入" })
+    .click();
   await expect(
     page.getByRole("button", { name: label!, exact: true }),
   ).toBeVisible();

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { Pool } from "pg";
 import { loginAndSetup, createMcpAccessToken, mcpCall } from "./helpers";
+import { localDateKey } from "@/shared/timezone";
 import { mkdir } from "node:fs/promises";
 
 const pool = new Pool({
@@ -43,7 +44,7 @@ async function evidence(page: Page, state: string) {
   ).toBe(true);
 }
 
-test("pomodoro defaults, pause, due, fourth long break, MCP takeover and 375px drawer", async ({
+test("pomodoro defaults, short breaks, MCP takeover, round reports and 375px drawer", async ({
   page,
   request,
   context,
@@ -61,47 +62,30 @@ test("pomodoro defaults, pause, due, fourth long break, MCP takeover and 375px d
   await page.getByLabel("专注分钟", { exact: true }).fill("25");
   await page.getByLabel("专注轮数", { exact: true }).fill("5");
   await page.getByLabel("短休息分钟", { exact: true }).fill("5");
-  await page.getByLabel("长休息分钟", { exact: true }).fill("15");
-  await page.getByRole("checkbox", { name: "每四段专注后提供长休息" }).check();
+  await expect(page.getByLabel("长休息分钟", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "保存设置", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const sound = page.getByRole("button", { name: "到时提示音", exact: true });
   if ((await sound.getAttribute("aria-pressed")) === "true")
     await sound.click();
   await expect(sound).toHaveAttribute("aria-pressed", "false");
-  const clockBox = () =>
-    page.getByText("25:00", { exact: true }).evaluate((el) => {
-      const rect = el.parentElement!.getBoundingClientRect();
-      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-    });
   const desktopSize = page.viewportSize()!;
-  await page.evaluate(() => window.scrollTo(0, 0));
-  const desktopIdle = await clockBox();
+  await expect(page.getByRole("timer")).toHaveCount(0);
   await evidence(page, "desktop-idle");
   await page.setViewportSize({ width: 375, height: 667 });
-  const mobileIdle = await clockBox();
   const startButton = page.getByRole("button", {
     name: /开始第一次执行|开始专注/,
   });
   await expect(startButton).toBeInViewport();
-  const controlsTop = await startButton.evaluate(
-    (el) => el.parentElement!.getBoundingClientRect().top,
-  );
-  expect(mobileIdle.y + mobileIdle.height).toBeLessThan(controlsTop);
   await evidence(page, "mobile-idle");
   await startButton.click();
+  await expect(page.locator(".focus-scene")).toBeVisible();
   await expect(page.getByRole("timer", { name: "本段剩余时间" })).toBeVisible();
-  const mobileRunning = await page.getByRole("timer").boundingBox();
-  expect(Math.abs(mobileRunning!.y - mobileIdle.y)).toBeLessThanOrEqual(2);
-  expect(mobileRunning!.height).toBe(mobileIdle.height);
   await expect(
     page.getByRole("button", { name: "暂停", exact: true }),
   ).toBeInViewport();
   await evidence(page, "mobile-running");
   await page.setViewportSize(desktopSize);
-  const desktopRunning = await page.getByRole("timer").boundingBox();
-  expect(Math.abs(desktopRunning!.y - desktopIdle.y)).toBeLessThanOrEqual(2);
-  expect(desktopRunning!.height).toBe(desktopIdle.height);
   await evidence(page, "desktop-running");
   await page.getByRole("button", { name: "暂停", exact: true }).click();
   await expect(page.getByText("专注已暂停", { exact: true })).toBeVisible();
@@ -141,23 +125,19 @@ test("pomodoro defaults, pause, due, fourth long break, MCP takeover and 375px d
     ).toBeVisible();
     await page
       .getByRole("button", {
-        name: round === 4 ? "开始长休息" : "开始休息",
+        name: "开始休息",
         exact: true,
       })
       .click();
-    await expect(
-      page.getByText(round === 4 ? "长休息中" : "休息中", { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText("休息中", { exact: true })).toBeVisible();
   }
   await page.setViewportSize({ width: 375, height: 667 });
   await evidence(page, "mobile-break");
   await page.getByRole("button", { name: "暂停", exact: true }).click();
-  await expect(page.getByText("长休息已暂停", { exact: true })).toBeVisible();
+  await expect(page.getByText("休息已暂停", { exact: true })).toBeVisible();
   await evidence(page, "mobile-paused");
   await page.getByRole("button", { name: "计时设置", exact: true }).click();
-  await expect(
-    page.getByText(/时长、轮数与长休息修改下次执行生效/),
-  ).toBeVisible();
+  await expect(page.getByText(/时长与轮数修改下次执行生效/)).toBeVisible();
   await page.getByLabel("专注分钟", { exact: true }).fill("50");
   await evidence(page, "mobile-drawer");
   await page.getByRole("button", { name: "保存设置", exact: true }).click();
@@ -171,7 +151,7 @@ test("pomodoro defaults, pause, due, fourth long break, MCP takeover and 375px d
     timeout: 15000,
   });
   await expect(
-    page.getByText("已完成全部 5 轮专注，辛苦了！", { exact: true }),
+    page.getByText("已完成全部 5 轮专注，休息一下吧。", { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "完成并保存", exact: true }),
@@ -191,4 +171,20 @@ test("pomodoro defaults, pause, due, fourth long break, MCP takeover and 375px d
   await expect(
     page.getByRole("button", { name: /开始第一次执行|开始专注/ }),
   ).toBeVisible();
+  const today = localDateKey(new Date(), "Asia/Shanghai");
+  await page.goto(`/history?period=day&date=${today}`);
+  await expect(page.getByRole("region", { name: "执行时间线" })).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "本期执行" })
+      .getByRole("button", { name: /第 [1-5] 轮/ }),
+  ).toHaveCount(5);
+  await evidence(page, "mobile-daily-report");
+  await page
+    .getByRole("navigation", { name: "统计周期" })
+    .getByRole("link", { name: "年", exact: true })
+    .click();
+  await expect(page.getByRole("link", { name: /查看详情/ })).toHaveCount(12);
+  await page.setViewportSize(desktopSize);
+  await evidence(page, "desktop-yearly-report");
 });

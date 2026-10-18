@@ -26,11 +26,7 @@ export async function openPhase(
 ) {
   const config = configOf(session.timerConfig);
   const minutes =
-    kind === "focus"
-      ? config.focusMinutes
-      : kind === "short_break"
-        ? config.shortBreakMinutes
-        : config.longBreakMinutes;
+    kind === "focus" ? config.focusMinutes : config.shortBreakMinutes;
   const remainingMs = minutes * 60_000;
   const deadlineAt = new Date(now.getTime() + remainingMs);
   const [phase] = await tx

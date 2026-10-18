@@ -2,6 +2,13 @@ import type { SessionPhase, Session } from "@/db/schema";
 import { timerConfigSchema } from "@/shared/schemas/session";
 
 export function configOf(value: unknown) {
+  // Existing snapshots may contain retired break settings; new writes stay strict.
+  if (value && typeof value === "object") {
+    const snapshot = { ...value } as Record<string, unknown>;
+    delete snapshot.longBreakMinutes;
+    delete snapshot.longBreakEnabled;
+    return timerConfigSchema.parse(snapshot);
+  }
   return timerConfigSchema.parse(value ?? {});
 }
 
@@ -41,12 +48,7 @@ export function projectPhases(
     (p) => p.kind === "focus" && p.complete,
   ).length;
   const config = configOf(session.timerConfig);
-  const breakKind =
-    config.longBreakEnabled &&
-    completedFocusCount > 0 &&
-    completedFocusCount % 4 === 0
-      ? "long_break"
-      : "short_break";
+  const breakKind = "short_break";
   const roundsExhausted =
     projected.filter((p) => p.kind === "focus").length >= config.iterations;
   const phaseActions =
@@ -117,12 +119,11 @@ export function plannedPhases(config: TimerConfig) {
   return Array.from({ length: config.iterations }, (_, index) => {
     const focus = { kind: "focus" as const, minutes: config.focusMinutes };
     if (index === config.iterations - 1) return [focus];
-    const long = config.longBreakEnabled && (index + 1) % 4 === 0;
     return [
       focus,
       {
-        kind: long ? ("long_break" as const) : ("short_break" as const),
-        minutes: long ? config.longBreakMinutes : config.shortBreakMinutes,
+        kind: "short_break" as const,
+        minutes: config.shortBreakMinutes,
       },
     ];
   }).flat();

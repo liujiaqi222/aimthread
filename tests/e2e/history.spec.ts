@@ -66,8 +66,8 @@ test("T09 calendar, goal filter, text edits, corrections, overlap confirmation a
     durationSeconds: 300,
     endedAt: new Date(midnight.getTime() - 13 * 3600000).toISOString(),
   });
-  await page.goto("/history");
-  await expect(page.getByRole("region", { name: "投入摘要" })).toContainText(
+  await page.goto(`/history?period=month&date=${today}`);
+  await expect(page.getByRole("region", { name: "周期分析" })).toContainText(
     "35 分钟",
   );
   await page.locator("summary").filter({ hasText: "按目标查看" }).click();
@@ -77,26 +77,34 @@ test("T09 calendar, goal filter, text edits, corrections, overlap confirmation a
     .click();
   await page.getByRole("button", { name: "应用" }).click();
   await expect(
-    page.getByRole("region", { name: "最近执行" }),
+    page.getByRole("region", { name: "本期执行" }),
   ).not.toContainText("其他目标");
   await expect(
     page.getByRole("heading", { name: "时间留下的痕迹" }),
   ).toBeVisible();
-  const summary = page.getByRole("region", { name: "投入摘要" });
+  const summary = page.getByRole("region", { name: "周期分析" });
   await expect(summary).toContainText("30 分钟");
   await expect(summary).toContainText("2 次");
   await page.addStyleTag({ content: "nextjs-portal {display:none}" });
   await page.screenshot({ path: ".test-data/t09-desktop.png", fullPage: true });
 
   // Keyboard activation opens the day. An earlier-started Session is present.
+  await page
+    .locator("summary")
+    .filter({ hasText: "活动日历与累计投入" })
+    .click();
   const dateButton = page.getByRole("button", {
     name: new RegExp(`^${today}，`),
   });
   await dateButton.focus();
   await dateButton.press("Enter");
-  const day = page.getByRole("dialog");
-  await expect(day).toContainText("当天投入 10 分钟");
-  await day.getByRole("button", { name: /已经完成的事项/ }).click();
+  await expect(page.getByRole("region", { name: "周期分析" })).toContainText(
+    "10 分钟",
+  );
+  await page
+    .getByRole("region", { name: "本期执行" })
+    .getByRole("button", { name: /已经完成的事项/ })
+    .click();
   const detail = page.getByRole("dialog");
   await expect(detail).toContainText("跨日投入");
   await detail.getByRole("button", { name: "更正记录" }).click();
@@ -106,9 +114,10 @@ test("T09 calendar, goal filter, text edits, corrections, overlap confirmation a
   const textOnly = await call("session_get", { id: cross.id });
   expect(textOnly.timeBasis).toBe("manual");
   expect(textOnly.durationSeconds).toBe(1200);
+  await page.goto(`/history?period=month&date=${today}&goalId=${goal.id}`);
 
   await page
-    .getByRole("region", { name: "最近执行" })
+    .getByRole("region", { name: "本期执行" })
     .getByRole("button", { name: /已经完成的事项/ })
     .click();
   await page.getByRole("button", { name: "更正记录" }).click();
@@ -124,7 +133,7 @@ test("T09 calendar, goal filter, text edits, corrections, overlap confirmation a
   expect(corrected.endedAt).toBe(cross.endedAt);
 
   await page
-    .getByRole("region", { name: "最近执行" })
+    .getByRole("region", { name: "本期执行" })
     .getByRole("button", { name: /已经完成的事项/ })
     .click();
   await page.getByRole("button", { name: "取消这段执行" }).click();
@@ -162,17 +171,21 @@ test("T09 calendar, goal filter, text edits, corrections, overlap confirmation a
   await page.getByRole("button", { name: "仍然保存" }).click();
   await expect(summary).toContainText("20 分钟");
   await expect(
-    page.getByRole("region", { name: "最近执行" }).locator("li"),
+    page.getByRole("region", { name: "本期执行" }).locator("li"),
   ).toHaveCount(2);
 
   await page.locator("summary").filter({ hasText: "筛选目标" }).click();
   await page.getByLabel("含已取消").check();
   await page.getByRole("button", { name: "应用" }).click();
   await expect(
-    page.getByRole("region", { name: "最近执行" }).locator("li"),
+    page.getByRole("region", { name: "本期执行" }).locator("li"),
   ).toHaveCount(3);
   await expect(summary).toContainText("20 分钟");
 
+  await page
+    .locator("summary")
+    .filter({ hasText: "活动日历与累计投入" })
+    .click();
   await page.setViewportSize({ width: 375, height: 812 });
   const monthSelect = page.getByLabel("日历月份");
   await expect(monthSelect).toBeVisible();
@@ -195,13 +208,12 @@ test("T09 calendar, goal filter, text edits, corrections, overlap confirmation a
   ).toBe(true);
   await page.screenshot({ path: ".test-data/t09-mobile.png", fullPage: true });
   await page.getByRole("button", { name: new RegExp(`^${today}，`) }).click();
-  await expect(page.getByRole("dialog")).toContainText("这一天还没有有效投入");
+  await expect(page.getByRole("region", { name: "周期分析" })).toContainText(
+    "0 秒",
+  );
+  await page.goto(`/history?period=month&date=${today}&goalId=${goal.id}`);
   await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "关闭", exact: true })
-    .click();
-  await page
-    .getByRole("region", { name: "最近执行" })
+    .getByRole("region", { name: "本期执行" })
     .getByRole("button", { name: /午间投入/ })
     .click();
   await expect(page.getByRole("dialog")).toContainText("10 分钟");

@@ -126,7 +126,11 @@ it("overlap confirmation preserves input and reuses the same submission key", as
   expect((screen.getByLabelText("笔记") as HTMLTextAreaElement).value).toBe(
     "保留这段输入",
   );
-  fireEvent.click(screen.getByRole("button", { name: "仍然保存" }));
+  const confirm = screen.getByRole("button", { name: "仍然保存" });
+  await waitFor(() =>
+    expect((confirm as HTMLButtonElement).disabled).toBe(false),
+  );
+  fireEvent.click(confirm);
   await waitFor(() => expect(logSessionAction).toHaveBeenCalledTimes(2));
   const [first, second] = vi.mocked(logSessionAction).mock.calls;
   expect(second![0]).toEqual({ ...first![0], allowOverlap: true });

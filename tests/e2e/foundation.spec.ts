@@ -6,38 +6,17 @@ import {
   loginAndSetup,
   mcpEnvelope,
   readMcpResponse,
-  webPassword,
 } from "./helpers";
 
 test("first-run account, setup, onboarding, session persistence, and logout", async ({
   page,
 }) => {
-  await page.goto("/today");
-  await expect(page).toHaveURL(/\/login\?next=/);
-
-  await page.getByLabel("设置实例密码").fill(webPassword);
-  await page
-    .getByRole("button", { name: /(创建|保存)并进入 AimThread/ })
-    .click();
-  await expect(page).toHaveURL(/\/setup$/);
-  await expect(page.getByText("数据库已就绪")).toBeVisible();
-
-  await page.getByLabel("时区").fill("Asia/Shanghai");
-  await page.getByRole("button", { name: "完成设置" }).click();
-
-  await expect(page).toHaveURL(/\/onboarding$/);
-  await page.getByLabel("目标标题").fill("完成 AimThread 首次验证");
-  await page.getByRole("button", { name: "继续" }).click();
-  await page.getByLabel("我最期待的是").fill("验证第一次执行链路");
-  await page.getByRole("button", { name: "保存目标，准备开始" }).click();
-
-  await expect(page).toHaveURL(/\/today\?first=1$/);
+  await loginAndSetup(page);
   await expect(
-    page.getByRole("button", { name: /开始第一次执行/ }),
+    page.getByRole("button", { name: /开始第一次执行|开始专注/ }),
   ).toBeVisible();
   await page.reload();
-  await expect(page).toHaveURL(/\/today\?first=1$/);
-
+  await expect(page).toHaveURL(/\/today/);
   await page.getByRole("button", { name: "退出" }).click();
   await expect(page).toHaveURL(/\/login$/);
   await page.goto("/settings");

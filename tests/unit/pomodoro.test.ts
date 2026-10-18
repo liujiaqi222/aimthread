@@ -106,7 +106,7 @@ describe("authoritative pomodoro projection", () => {
     expect(view.completedFocusCount).toBe(0);
     expect(view.phaseActions).toEqual(["resume"]);
   });
-  it("offers long break on fourth complete focus only, then short on fifth", () => {
+  it("always offers a short break, including after the fourth round", () => {
     const phases = [1, 2, 3, 4].map((sequence) => ({
       ...phase,
       sequence,
@@ -115,7 +115,7 @@ describe("authoritative pomodoro projection", () => {
       complete: true,
     }));
     expect(projectPhases(session, phases, deadline).nextBreakKind).toBe(
-      "long_break",
+      "short_break",
     );
     expect(
       projectPhases(
@@ -174,8 +174,6 @@ describe("authoritative pomodoro projection", () => {
     expect(configOf(null)).toMatchObject({
       focusMinutes: 25,
       shortBreakMinutes: 5,
-      longBreakMinutes: 15,
-      longBreakEnabled: true,
     });
     for (const invalid of [0, 181, 1.5])
       expect(
@@ -191,7 +189,7 @@ describe("authoritative pomodoro projection", () => {
 });
 
 describe("planned pomodoro rounds", () => {
-  it("omits a trailing break and includes the fourth-round long break only when another round follows", () => {
+  it("omits a trailing break and uses only short breaks", () => {
     const single = plannedPhases(configOf({ iterations: 1 }));
     expect(single).toEqual([{ kind: "focus", minutes: 25 }]);
     const plan = plannedPhases(configOf({ iterations: 5 }));
@@ -203,13 +201,13 @@ describe("planned pomodoro rounds", () => {
       "focus",
       "short_break",
       "focus",
-      "long_break",
+      "short_break",
       "focus",
     ]);
-    expect(plan.reduce((sum, p) => sum + p.minutes, 0)).toBe(155);
+    expect(plan.reduce((sum, p) => sum + p.minutes, 0)).toBe(145);
     expect(
       plannedPhases(configOf({ iterations: 5, longBreakEnabled: false })).some(
-        (p) => p.kind === "long_break",
+        (p) => String(p.kind) === "long_break",
       ),
     ).toBe(false);
   });

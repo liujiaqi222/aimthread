@@ -24,6 +24,10 @@ _Avoid_: Pomodoro, Run, Focus record, Log entry, Work unit
 A contiguous half-open time interval `[start, end)` representing actual focused effort within a Session. Excludes breaks, pauses, or idle time awaiting next steps.
 _Avoid_: Focus segment, Chunk, Period
 
+**Focus Round**:
+A single focus phase in Pomodoro mode. It contains one or more Focus Intervals when interrupted by pauses and has its own actual focused duration.
+_Avoid_: Session, Focus Interval, Work unit
+
 **Timer Mode**:
 The timing style chosen for a Session, currently supporting Stopwatch (count-up) and Pomodoro (structured focus and break intervals).
 _Avoid_: Clock type, Timer style

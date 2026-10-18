@@ -430,6 +430,7 @@ export function createPlanningService(database: Database): PlanningService {
                   ...task,
                   description: task.description ?? null,
                   estimatedMinutes: task.estimatedMinutes ?? null,
+                  initialEstimatedMinutes: task.estimatedMinutes ?? null,
                   resourceType: task.resourceType ?? null,
                   resourceValue: task.resourceValue ?? null,
                   note: task.note ?? null,
@@ -470,7 +471,16 @@ export function createPlanningService(database: Database): PlanningService {
           );
         const [updated] = await tx
           .update(tasks)
-          .set({ ...value, id: undefined, updatedAt: new Date() })
+          .set({
+            ...value,
+            id: undefined,
+            ...(value.estimatedMinutes != null
+              ? {
+                  initialEstimatedMinutes: sql`coalesce(${tasks.initialEstimatedMinutes}, ${value.estimatedMinutes})`,
+                }
+              : {}),
+            updatedAt: new Date(),
+          })
           .where(eq(tasks.id, value.id))
           .returning();
         return updated!;

@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  ArrowUpRight,
+  ChevronDown,
+  X,
   Circle,
   CircleDot,
   ListTodo,
@@ -20,22 +21,13 @@ import {
 import { TimerPreferences } from "./timer-preferences";
 import { SoundToggle } from "./sound-toggle";
 import { configOf } from "@/shared/pomodoro";
-import { formatTimeDigits } from "@/shared/session-timer";
+import { Modal } from "@/components/focus/modal";
 import { unlockTimerSound } from "./timer-sound";
-import { PhaseProgress } from "./phase-progress";
+
 import { ExecutionHeading } from "./execution-heading";
-import { TimerControls, TimerStage } from "./timer-stage";
-import { FocusClock } from "@/components/today/focus-clock";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type { Task } from "@/db/schema";
 import type { DashboardData } from "@/services/dashboard";
 
@@ -85,6 +77,11 @@ export function IdlePanel({
     persistedMode.current = serverMode;
   }, [serverMode]);
   const config = configOf(dashboard.timerSettings?.timerPreferences);
+  const [picker, setPicker] = useState<"goal" | "task" | null>(null);
+  const [pickerError, setPickerError] = useState<string | null>(null);
+  const [choosing, setChoosing] = useState(false);
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState(false);
   const [intent, setIntent] = useState("");
   const [showIntent, setShowIntent] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -119,8 +116,13 @@ export function IdlePanel({
   const handleSelectGoal = async (goalId: string) => {
     onError(null);
     const result = await selectionSetAction({ goalId });
-    if (!result.ok) onError(result.error.message);
+    if (!result.ok) {
+      onError(result.error.message);
+      setPickerError(result.error.message);
+      return false;
+    }
     await onRefresh();
+    return true;
   };
 
   const handleSelectTask = async (goalId: string, taskId: string | null) => {
@@ -139,16 +141,21 @@ export function IdlePanel({
           previousSelection.task,
         );
         onError(result.error.message);
+        setPickerError(result.error.message);
+        return false;
       } else {
         // Background sync without blocking UI
         void onRefresh();
+        return true;
       }
     } catch {
       onOptimisticSelectTask?.(
         previousSelection.goal.id,
         previousSelection.task,
       );
+      setPickerError("切换任务失败，请稍后重试");
       onError("切换任务失败，请稍后重试");
+      return false;
     }
   };
 
@@ -169,6 +176,7 @@ export function IdlePanel({
       status: "pending",
       position: (todos[todos.length - 1]?.position ?? 0) + 1,
       estimatedMinutes: null,
+      initialEstimatedMinutes: null,
       resourceType: null,
       resourceValue: null,
       note: null,
@@ -207,68 +215,79 @@ export function IdlePanel({
     }
   };
 
-  const pendingCount =
-    goals.find((item) => item.goal.id === selection.goal.id)
-      ?.pendingTaskCount ?? taskOptions.length;
+  const choose = async (id: string | null) => {
+    if (choosing) return;
+    setChoosing(true);
+    setPickerError(null);
+    try {
+      const saved =
+        picker === "goal" && id
+          ? await handleSelectGoal(id)
+          : await handleSelectTask(selection.goal.id, id);
+      if (saved) setPicker(null);
+    } catch {
+      setPickerError("选择未保存，请重试。");
+      onError("选择未保存，请重试。");
+    } finally {
+      setChoosing(false);
+    }
+  };
 
   return (
-    <div className="space-y-7 sm:space-y-10">
-      <div className="flex flex-col items-center">
-        <ExecutionHeading
-          goal={selection.goal.title}
-          task={selection.task?.title}
-          resumeHint={resumeHint}
-        >
-          <div className="flex w-full flex-col items-stretch rounded-2xl border border-stone-200 bg-white p-1.5 shadow-[0_1px_2px_rgba(28,25,23,0.05)] sm:w-auto sm:flex-row sm:items-center sm:rounded-full sm:p-1">
-            <SwitchSelect
-              label="目标"
-              value={selection.goal.id}
-              onChange={(goalId) => void handleSelectGoal(goalId)}
-              options={goals.map((item) => ({
-                value: item.goal.id,
-                label: item.goal.title,
-              }))}
-            />
-            <span
-              aria-hidden="true"
-              className="h-px w-full bg-stone-100 sm:mx-1 sm:h-5 sm:w-px sm:bg-stone-200"
-            />
-            <SwitchSelect
-              label="任务"
-              value={selection.task?.id ?? ""}
-              onChange={(taskId) =>
-                void handleSelectTask(selection.goal.id, taskId || null)
-              }
-              options={[
-                { value: "", label: "不设任务" },
-                ...taskOptions
-                  .filter((task) => !task.id.startsWith("temp-"))
-                  .map((task) => ({
-                    value: task.id,
-                    label: task.title,
-                  })),
-              ]}
-            />
-          </div>
-        </ExecutionHeading>
-
-        <div className="mt-4 flex w-full flex-wrap items-center justify-center gap-2 sm:mt-6 sm:gap-5">
+    <div className="mx-auto max-w-[760px] space-y-10">
+      <ExecutionHeading
+        goal={selection.goal.title}
+        task={selection.task?.title}
+        description={selection.task?.description ?? selection.goal.description}
+        resource={selection.task?.resourceValue}
+        resumeHint={resumeHint}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Button
+            variant="outline"
+            aria-label="选择目标"
+            onClick={() => {
+              setSearch("");
+              setPicker("goal");
+            }}
+            className="max-w-full"
+          >
+            <span className="truncate">{selection.goal.title}</span>
+            <ChevronDown className="size-4 shrink-0" />
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setSearch("");
+              setPicker("task");
+            }}
+          >
+            更换任务
+          </Button>
+        </div>
+      </ExecutionHeading>
+      <section
+        className="border-border flex flex-col gap-5 border-y py-6 sm:flex-row sm:items-center sm:justify-between"
+        aria-label="准备专注"
+      >
+        <div className="flex flex-wrap items-center gap-2">
           <div
             role="group"
             aria-label="计时模式"
-            className="flex rounded-full bg-stone-100 p-1"
+            className="bg-muted flex rounded-lg p-1"
           >
             {(["pomodoro", "stopwatch"] as const).map((value) => (
               <button
                 key={value}
+                aria-label={value === "pomodoro" ? "番茄钟" : "正计时"}
                 type="button"
-                aria-pressed={mode === value}
                 disabled={busy !== "none"}
+                aria-pressed={mode === value}
+                className={`min-h-10 rounded-md px-3 text-sm ${mode === value ? "bg-card text-primary font-medium shadow-sm" : "text-muted-foreground"}`}
                 onClick={() => {
                   if (value === mode) return;
                   const version = ++modeVersion.current;
                   setMode(value);
-                  onError(null);
                   modeSaveQueue.current = modeSaveQueue.current.then(
                     async () => {
                       try {
@@ -281,9 +300,9 @@ export function IdlePanel({
                           },
                         );
                         const result = await response.json();
-                        if (!response.ok || !result.ok) {
-                          throw new Error("Mode preference was not saved");
-                        } else persistedMode.current = value;
+                        if (!response.ok || !result.ok)
+                          throw new Error("Save failed");
+                        persistedMode.current = value;
                       } catch {
                         if (version === modeVersion.current) {
                           setMode(persistedMode.current);
@@ -293,298 +312,224 @@ export function IdlePanel({
                     },
                   );
                 }}
-                className={`rounded-full px-4 py-2 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-[#d85c41] ${mode === value ? "bg-white text-[#b54b35] shadow-sm" : "text-stone-600"}`}
               >
-                {value === "pomodoro" ? "番茄钟" : "正计时"}
+                {value === "pomodoro"
+                  ? `番茄 · ${config.focusMinutes} 分钟`
+                  : "正计时"}
               </button>
             ))}
           </div>
-          <div
-            aria-hidden={mode !== "pomodoro"}
-            inert={mode !== "pomodoro"}
-            className={`flex items-center justify-center gap-2 ${mode === "pomodoro" ? "" : "hidden"}`}
-          >
-            <TimerPreferences
-              value={dashboard.timerSettings?.timerPreferences}
-              onSaved={() => void onRefresh()}
-            />
-            <SoundToggle
-              value={dashboard.timerSettings?.timerPreferences}
-              onSaved={() => void onRefresh()}
-            />
-          </div>
-        </div>
-        <TimerStage
-          progress={
-            <div
-              aria-hidden={mode !== "pomodoro"}
-              inert={mode !== "pomodoro"}
-              className={mode === "pomodoro" ? "visible" : "invisible"}
-            >
-              <PhaseProgress config={config} />
-            </div>
-          }
-        >
-          <div className="flex flex-col items-center gap-3 sm:gap-6">
-            <p className="text-xs leading-none font-medium tracking-wide text-stone-500">
-              准备开始
-            </p>
-            <FocusClock
-              value={
-                mode === "pomodoro"
-                  ? formatTimeDigits(config.focusMinutes * 60)
-                  : "00:00"
-              }
-              tone="idle"
-              aria-hidden="true"
-            />
-          </div>
-        </TimerStage>
-
-        <div className="mt-3 flex w-full flex-col items-center gap-3 sm:mt-6 sm:gap-5">
-          <TimerControls>
-            <Button
-              size="lg"
-              disabled={busy !== "none"}
-              onClick={() => {
-                unlockTimerSound();
-                onStart({ intent: intent.trim() || null, timerMode: mode });
-              }}
-              className="h-12 w-full gap-2 rounded-xl bg-[#d85c41] px-6 text-base text-white shadow-sm hover:bg-[#c84f36]"
-            >
-              <Play className="size-4 fill-current" aria-hidden="true" />
-              {busy === "start"
-                ? "开始中…"
-                : firstRun
-                  ? "开始第一次执行"
-                  : "开始专注"}
-            </Button>
-          </TimerControls>
-          {showIntent ? (
-            <div className="w-full max-w-sm rounded-xl border border-stone-200 bg-stone-50 p-3 text-left">
-              <div className="flex items-baseline justify-between gap-3">
-                <label
-                  htmlFor="session-intent"
-                  className="text-sm font-medium text-stone-700"
-                >
-                  本次说明
-                </label>
-                <button
-                  type="button"
-                  className="text-xs text-stone-400 hover:text-stone-700"
-                  onClick={() => {
-                    setShowIntent(false);
-                    setIntent("");
-                  }}
-                >
-                  移除
-                </button>
-              </div>
-              <Input
-                id="session-intent"
-                value={intent}
-                onChange={(e) => setIntent(e.target.value)}
-                placeholder="例如：先梳理首页结构"
-                className="mt-2 h-10 border-stone-300 bg-white shadow-none"
-                autoFocus
+          {mode === "pomodoro" && (
+            <>
+              <TimerPreferences
+                value={dashboard.timerSettings?.timerPreferences}
+                onSaved={() => void onRefresh()}
               />
-              <p className="mt-2 text-xs leading-5 text-stone-500">
-                只附在这次专注记录里，不会加入下面的目标任务。
-              </p>
-            </div>
-          ) : (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="text-stone-500"
-              onClick={() => setShowIntent(true)}
-            >
-              <Plus className="size-3.5" aria-hidden="true" />
-              添加本次说明
-            </Button>
+              <SoundToggle
+                value={dashboard.timerSettings?.timerPreferences}
+                onSaved={() => void onRefresh()}
+              />
+            </>
           )}
         </div>
-      </div>
-
-      <section
-        aria-labelledby="todos-title"
-        className="space-y-4 rounded-2xl border border-stone-200 bg-stone-50 p-5 sm:p-6"
-      >
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-baseline gap-2">
-            <h2
-              id="todos-title"
-              className="text-sm font-semibold text-stone-800"
-            >
-              目标任务
-            </h2>
-            <span className="text-xs text-stone-400">
-              {pendingCount} 项未完成
-            </span>
+        <Button
+          size="lg"
+          disabled={busy !== "none"}
+          onClick={() => {
+            unlockTimerSound();
+            onStart({ intent: intent.trim() || null, timerMode: mode });
+          }}
+          className="h-12 shrink-0 px-7"
+        >
+          <Play className="size-4 fill-current" />
+          {busy === "start"
+            ? "开始中…"
+            : firstRun
+              ? "开始第一次执行"
+              : "开始专注"}
+        </Button>
+      </section>
+      {selection.goalOnly &&
+        (showIntent ? (
+          <div>
+            <label htmlFor="session-intent" className="text-sm">
+              本次说明（可选）
+            </label>
+            <Input
+              id="session-intent"
+              value={intent}
+              onChange={(e) => setIntent(e.target.value)}
+              placeholder="这次准备推进什么？"
+              className="mt-2"
+            />
           </div>
-          <Button
-            variant="ghost"
-            size="xs"
-            nativeButton={false}
-            render={<Link href="/goals" />}
-            className="gap-0.5 text-stone-500"
-          >
-            管理
-            <ArrowUpRight className="size-3" aria-hidden="true" />
-          </Button>
-        </div>
-
-        <form onSubmit={handleQuickAddTask} className="flex items-center gap-2">
-          <Input
-            value={newTaskTitle}
-            onChange={(e) => setNewTaskTitle(e.target.value)}
-            placeholder={`给「${selection.goal.title}」添加任务`}
-            maxLength={500}
-            className="h-10 bg-white text-sm"
-          />
-          <Button
-            type="submit"
-            size="sm"
-            variant="outline"
-            className="h-10 bg-white"
-            disabled={!newTaskTitle.trim()}
-          >
-            <Plus className="size-3.5" aria-hidden="true" />
-            创建
-          </Button>
-        </form>
-
-        {todos.length > 0 ? (
-          <>
-            <p className="text-xs text-stone-400">
-              点击任务设为本次专注；再次点击可取消。
-            </p>
-            <ul className="divide-y divide-stone-100 overflow-hidden rounded-xl border border-stone-200 bg-white">
-              {todos.map((task) => {
-                const selected = selection.task?.id === task.id;
-                const isOptimistic = task.id.startsWith("temp-");
-                return (
-                  <li key={task.id}>
-                    <button
-                      type="button"
-                      disabled={isOptimistic}
-                      aria-pressed={selected}
-                      onClick={() =>
-                        void handleSelectTask(
-                          selection.goal.id,
-                          selected ? null : task.id,
-                        )
-                      }
-                      className={`group flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors ${
-                        selected ? "bg-[#fdf6f1]" : "hover:bg-stone-50"
-                      } ${isOptimistic ? "cursor-default opacity-75" : ""}`}
-                    >
-                      {isOptimistic ? (
-                        <Loader2
-                          className="size-4 shrink-0 animate-spin text-stone-400"
-                          aria-hidden="true"
-                        />
-                      ) : selected ? (
-                        <CircleDot
-                          className="size-4 shrink-0 text-[#d85c41]"
-                          aria-hidden="true"
-                        />
-                      ) : (
-                        <Circle
-                          className="size-4 shrink-0 text-stone-300"
-                          aria-hidden="true"
-                        />
-                      )}
-                      <span
-                        className={`min-w-0 flex-1 truncate ${
-                          selected
-                            ? "font-medium text-stone-950"
-                            : "text-stone-700"
-                        }`}
-                      >
-                        {task.title}
-                      </span>
-                      <span
-                        className={`shrink-0 text-xs ${
-                          isOptimistic
-                            ? "text-stone-400"
-                            : selected
-                              ? "font-medium text-[#b54b35]"
-                              : "hidden text-stone-400 group-hover:inline"
-                        }`}
-                      >
-                        {isOptimistic
-                          ? "创建中…"
-                          : selected
-                            ? "本次专注"
-                            : "设为本次"}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-            {pendingCount > todos.length && (
-              <Link
-                href="/goals"
-                className="flex items-center justify-center gap-1 rounded-xl border border-dashed border-stone-200 py-2.5 text-xs text-stone-500 transition-colors hover:border-stone-300 hover:text-stone-800"
-              >
-                还有 {pendingCount - todos.length} 项未完成，到管理页查看全部
-                <ArrowUpRight className="size-3.5" aria-hidden="true" />
-              </Link>
-            )}
-          </>
         ) : (
-          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-stone-200 bg-white/60 px-4 py-7 text-center">
-            <ListTodo className="size-5 text-stone-300" aria-hidden="true" />
-            <p className="max-w-xs text-sm leading-6 text-stone-500">
-              还没有任务。可以直接围绕目标专注，或在上面创建一项。
-            </p>
+          <Button variant="ghost" onClick={() => setShowIntent(true)}>
+            <Plus className="size-4" />
+            添加本次说明
+          </Button>
+        ))}
+      <section>
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded(!expanded)}
+          className="text-muted-foreground flex min-h-11 w-full items-center justify-between text-sm"
+        >
+          <span>目标下的其他任务 · {taskOptions.length}</span>
+          <ChevronDown className={`size-4 ${expanded ? "rotate-180" : ""}`} />
+        </button>
+        {expanded && (
+          <div className="mt-3 space-y-4">
+            <form onSubmit={handleQuickAddTask} className="flex gap-2">
+              <Input
+                aria-label="新任务标题"
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+                placeholder="添加一项任务"
+                maxLength={500}
+              />
+              <Button
+                type="submit"
+                variant="outline"
+                disabled={!newTaskTitle.trim()}
+              >
+                <Plus className="size-4" />
+                创建
+              </Button>
+            </form>
+            <ul className="divide-border divide-y">
+              {todos.map((task) => (
+                <li key={task.id}>
+                  <button
+                    type="button"
+                    disabled={task.id.startsWith("temp-")}
+                    aria-pressed={selection.task?.id === task.id}
+                    onClick={() =>
+                      void handleSelectTask(selection.goal.id, task.id)
+                    }
+                    className="flex min-h-12 w-full items-center gap-3 py-3 text-left text-sm"
+                  >
+                    {task.id.startsWith("temp-") ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : selection.task?.id === task.id ? (
+                      <CircleDot className="text-primary size-4" />
+                    ) : (
+                      <Circle className="text-muted-foreground size-4" />
+                    )}
+                    <span className="min-w-0 break-words">{task.title}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {!todos.length && (
+              <p className="text-muted-foreground text-sm">
+                <ListTodo className="mr-2 inline size-4" />
+                可以直接围绕目标开始。
+              </p>
+            )}
+            <Link href="/goals" className="text-primary text-sm underline">
+              管理全部目标和任务
+            </Link>
           </div>
         )}
       </section>
+      {picker && (
+        <Modal
+          labelledBy="work-picker-title"
+          onClose={() => {
+            if (!choosing) setPicker(null);
+          }}
+          panelClassName="max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl"
+        >
+          <div className="flex items-center justify-between">
+            <h2 id="work-picker-title" className="text-xl font-semibold">
+              {picker === "goal" ? "选择目标" : "更换任务"}
+            </h2>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="关闭选择"
+              disabled={choosing}
+              onClick={() => setPicker(null)}
+            >
+              <X />
+            </Button>
+          </div>
+          <Input
+            aria-label="查找工作"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={picker === "goal" ? "查找目标" : "查找任务"}
+            className="my-5"
+          />
+          {pickerError && (
+            <p role="alert" className="text-destructive mb-4 text-sm">
+              {pickerError}
+            </p>
+          )}
+          <div className="space-y-2">
+            {picker === "goal" ? (
+              goals
+                .filter((item) =>
+                  item.goal.title.toLowerCase().includes(search.toLowerCase()),
+                )
+                .map((item) => (
+                  <button
+                    type="button"
+                    key={item.goal.id}
+                    disabled={choosing}
+                    onClick={() => void choose(item.goal.id)}
+                    aria-pressed={item.goal.id === selection.goal.id}
+                    className="border-border hover:bg-accent flex min-h-14 w-full items-center justify-between gap-3 rounded-lg border p-3 text-left text-sm"
+                  >
+                    <span className="min-w-0 break-words">
+                      {item.goal.title}
+                    </span>
+                    <span className="text-muted-foreground shrink-0 text-xs">
+                      {item.pendingTaskCount} 项任务
+                    </span>
+                  </button>
+                ))
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  disabled={choosing}
+                  onClick={() => void choose(null)}
+                  className="w-full"
+                >
+                  只围绕目标执行
+                </Button>
+                {taskOptions
+                  .filter(
+                    (task) =>
+                      !task.id.startsWith("temp-") &&
+                      task.title.toLowerCase().includes(search.toLowerCase()),
+                  )
+                  .map((task) => (
+                    <button
+                      type="button"
+                      key={task.id}
+                      disabled={choosing}
+                      aria-pressed={selection.task?.id === task.id}
+                      onClick={() => void choose(task.id)}
+                      className="border-border hover:bg-accent min-h-12 w-full rounded-lg border p-3 text-left text-sm"
+                    >
+                      {task.title}
+                    </button>
+                  ))}
+              </>
+            )}
+          </div>
+          <Link
+            href="/goals"
+            className="text-primary mt-6 inline-block text-sm underline"
+          >
+            管理或新增目标
+          </Link>
+        </Modal>
+      )}
     </div>
-  );
-}
-
-function SwitchSelect({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: { value: string; label: string }[];
-}) {
-  return (
-    <Select
-      items={options}
-      value={value}
-      onValueChange={(nextValue) => onChange(nextValue ?? "")}
-    >
-      <SelectTrigger
-        aria-label={label}
-        className="h-9 w-full min-w-0 gap-1.5 rounded-[10px] border-transparent bg-transparent px-3 text-stone-800 shadow-none hover:bg-stone-100 data-[size=default]:h-9 sm:w-auto sm:max-w-56 sm:rounded-full sm:px-3.5"
-      >
-        <span className="shrink-0 text-xs text-stone-400">{label}</span>
-        <SelectValue className="min-w-0 flex-1 text-left font-medium text-stone-900" />
-      </SelectTrigger>
-      <SelectContent
-        align="start"
-        alignItemWithTrigger={false}
-        className="max-w-80 border-stone-200 bg-white"
-      >
-        <SelectGroup>
-          {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectContent>
-    </Select>
   );
 }

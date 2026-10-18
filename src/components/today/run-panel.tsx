@@ -105,12 +105,7 @@ export function RunPanel({
     completedFocusCount >= config.iterations;
   const pendingBreak = !allComplete && due && phase?.kind === "focus";
   const pendingFocus = !allComplete && due && !!rest;
-  const breakKind =
-    config.longBreakEnabled &&
-    completedFocusCount > 0 &&
-    completedFocusCount % 4 === 0
-      ? "long_break"
-      : "short_break";
+  const breakKind = "short_break" as const;
   const displayKind = pendingFocus
     ? "focus"
     : pendingBreak
@@ -120,9 +115,7 @@ export function RunPanel({
   const clockSeconds = allComplete
     ? 0
     : pendingBreak
-      ? (breakKind === "long_break"
-          ? config.longBreakMinutes
-          : config.shortBreakMinutes) * 60
+      ? config.shortBreakMinutes * 60
       : pendingFocus
         ? config.focusMinutes * 60
         : display.seconds;
@@ -174,12 +167,17 @@ export function RunPanel({
   });
 
   const { register } = useSessionNavigation();
-  const finishForNavigation = useEffectEvent(async () => {
-    if (busy !== "none") return false;
-    return onFinishRequested(await noteAutosave.flush());
+  // Navigation is invoked by a user event, not an Effect. Keep its callback
+  // current through a ref instead of calling an Effect Event from the guard.
+  const navigationFinishRef = useRef<() => Promise<boolean>>(async () => false);
+  useEffect(() => {
+    navigationFinishRef.current = async () => {
+      if (busy !== "none") return false;
+      return onFinishRequested(await noteAutosave.flush());
+    };
   });
   useEffect(
-    () => register({ finish: () => finishForNavigation() }),
+    () => register({ finish: () => navigationFinishRef.current() }),
     [register],
   );
 
@@ -320,28 +318,18 @@ export function RunPanel({
       <div className="flex flex-col items-center text-center">
         <ExecutionHeading
           goal={session.goal.title}
-          task={session.task?.title}
+          task={session.task?.title ?? session.intent}
+          description={session.task?.description ?? session.goal.description}
+          resource={session.task?.resourceValue}
           resumeHint={resumeHint}
         />
 
         <div className="mt-4 flex w-full flex-wrap items-center justify-center gap-2 sm:mt-6 sm:gap-5">
-          <div
-            role="group"
-            aria-label="计时模式"
-            className="flex rounded-full bg-stone-100 p-1"
-          >
-            {(["pomodoro", "stopwatch"] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                disabled
-                aria-pressed={session.timerMode === value}
-                className={`cursor-not-allowed rounded-full px-4 py-2 text-sm ${session.timerMode === value ? "bg-white text-[#b54b35] shadow-sm" : "text-stone-600"}`}
-              >
-                {value === "pomodoro" ? "番茄钟" : "正计时"}
-              </button>
-            ))}
-          </div>
+          <p className="text-muted-foreground text-sm">
+            {session.timerMode === "pomodoro"
+              ? `番茄钟 · 第 ${Math.min(config.iterations, (session.phases ?? []).filter((p) => p.kind === "focus").length)} / ${config.iterations} 轮`
+              : "正计时"}
+          </p>
           <div
             aria-hidden={session.timerMode !== "pomodoro"}
             inert={session.timerMode !== "pomodoro"}
@@ -403,7 +391,7 @@ export function RunPanel({
           </div>
         </TimerStage>
         {allComplete && (
-          <p className="mt-4 text-sm text-stone-600">
+          <p className="text-muted-foreground mt-4 text-sm">
             已完成全部 {config.iterations} 轮专注，休息一下吧。
             {automaticSaveFailed
               ? "保存失败，请重试。"
@@ -411,7 +399,7 @@ export function RunPanel({
           </p>
         )}
         {commandError && (
-          <p role="alert" className="mt-4 text-sm text-red-700">
+          <p role="alert" className="text-destructive mt-4 text-sm">
             {commandError}
           </p>
         )}
@@ -424,7 +412,7 @@ export function RunPanel({
                   size="lg"
                   disabled={busy !== "none" || !automaticSaveFailed}
                   onClick={() => void saveCompletedSession()}
-                  className="h-12 rounded-xl bg-[#537d61] px-6 text-white hover:bg-[#456950]"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 h-12 rounded-xl px-6"
                 >
                   {automaticSaveFailed && busy !== "finish"
                     ? "重试保存"
@@ -437,9 +425,9 @@ export function RunPanel({
                       size="lg"
                       disabled={busy !== "none"}
                       onClick={() => command("start_break")}
-                      className={`h-12 rounded-xl px-6 text-white ${breakKind === "long_break" ? "bg-[#b49350] hover:bg-[#9b7c3f]" : "bg-[#70917b] hover:bg-[#5c7c66]"}`}
+                      className={`text-primary-foreground bg-primary hover:bg-primary/90 h-12 rounded-xl px-6`}
                     >
-                      {breakKind === "long_break" ? "开始长休息" : "开始休息"}
+                      开始休息
                     </Button>
                   )}
                   <Button
@@ -447,7 +435,7 @@ export function RunPanel({
                     variant={rest ? "default" : "outline"}
                     disabled={busy !== "none"}
                     onClick={() => command("start_next_focus")}
-                    className={`h-12 rounded-xl px-6 ${rest ? "bg-[#d85c41] text-white hover:bg-[#c84f36]" : ""}`}
+                    className={`h-12 rounded-xl px-6 ${rest ? "bg-primary text-primary-foreground hover:bg-primary/90" : ""}`}
                   >
                     {!rest && (
                       <SkipForward className="size-4" aria-hidden="true" />
@@ -464,7 +452,7 @@ export function RunPanel({
                           size="lg"
                           disabled={busy !== "none"}
                           onClick={togglePause}
-                          className={`h-12 gap-2 rounded-xl px-6 text-base text-white ${rest ? "bg-[#70917b] hover:bg-[#5c7c66]" : "bg-[#d85c41] hover:bg-[#c84f36]"}`}
+                          className={`text-primary-foreground h-12 gap-2 rounded-xl px-6 text-base ${rest ? "bg-primary hover:bg-primary/90" : "bg-primary hover:bg-primary/90"}`}
                         />
                       }
                     >
@@ -515,7 +503,7 @@ export function RunPanel({
                         aria-label={
                           busy === "finish" ? "结束保存中" : "结束并保存"
                         }
-                        className="size-12 rounded-xl border-stone-300 bg-white"
+                        className="border-input bg-card size-12 rounded-xl"
                       />
                     }
                   >
@@ -540,7 +528,7 @@ export function RunPanel({
                       disabled={busy !== "none"}
                       onClick={onOpenCancel}
                       aria-label="取消本次执行"
-                      className="size-12 rounded-xl text-stone-500 hover:text-red-700"
+                      className="text-muted-foreground hover:text-destructive size-12 rounded-xl"
                     />
                   }
                 >
@@ -554,7 +542,7 @@ export function RunPanel({
       </div>
 
       {session.intent && (
-        <p className="mt-4 text-center text-sm leading-6 text-stone-600">
+        <p className="text-muted-foreground mt-4 text-center text-sm leading-6">
           {session.intent}
         </p>
       )}

@@ -154,6 +154,7 @@ describe("IdlePanel quick task add", () => {
       status: "pending",
       position: 1,
       estimatedMinutes: null,
+      initialEstimatedMinutes: null,
       resourceType: null,
       resourceValue: null,
       note: null,
@@ -182,8 +183,9 @@ describe("IdlePanel quick task add", () => {
       }),
     );
 
+    fireEvent.click(screen.getByRole("button", { name: /目标下的其他任务/ }));
     const input = screen.getByPlaceholderText(
-      "给「产品首页重构」添加任务",
+      "添加一项任务",
     ) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "整理顶部导航结构" } });
 
@@ -238,8 +240,9 @@ describe("IdlePanel quick task add", () => {
       }),
     );
 
+    fireEvent.click(screen.getByRole("button", { name: /目标下的其他任务/ }));
     const input = screen.getByPlaceholderText(
-      "给「产品首页重构」添加任务",
+      "添加一项任务",
     ) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "失败的任务" } });
 
@@ -277,6 +280,7 @@ describe("IdlePanel quick task add", () => {
       status: "pending",
       position: 1,
       estimatedMinutes: null,
+      initialEstimatedMinutes: null,
       resourceType: null,
       resourceValue: null,
       note: null,
@@ -301,6 +305,7 @@ describe("IdlePanel quick task add", () => {
       }),
     );
 
+    fireEvent.click(screen.getByRole("button", { name: /目标下的其他任务/ }));
     const taskButton = screen.getByRole("button", { name: /优化响应速度/ });
     fireEvent.click(taskButton);
 

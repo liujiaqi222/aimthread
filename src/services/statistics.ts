@@ -35,7 +35,7 @@ export interface Statistics {
   weekStartsOn: number;
   unit: "seconds";
   period: {
-    kind: "today" | "week" | "month" | "custom" | "all";
+    kind: "today" | "week" | "month" | "year" | "custom" | "all";
     start: Date;
     end: Date;
   };

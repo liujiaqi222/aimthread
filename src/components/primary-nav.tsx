@@ -2,85 +2,44 @@
 
 import { SessionLink as Link } from "@/components/session-navigation";
 import { usePathname } from "next/navigation";
-import { Footprints, SunMedium } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
+import { Footprints, SunMedium, Settings, Layers } from "lucide-react";
 import { cn } from "cn";
-
-/**
- * Main navigation (PRD §5.1 / §8.3): only 今天 and 足迹. Settings lives
- * behind a gear; the remaining real maintenance pages stay reachable
- * from there.
- */
 
 const links = [
   { href: "/today", label: "今天", icon: SunMedium },
   { href: "/history", label: "足迹", icon: Footprints },
+  { href: "/goals", label: "目标管理", icon: Layers },
+  { href: "/settings", label: "设置", icon: Settings },
 ];
-
-function isCurrentPath(pathname: string, href: string) {
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
-
-export function PrimaryNav({ variant }: { variant: "desktop" | "mobile" }) {
+export function PrimaryNav({
+  onNavigate,
+  collapsed = false,
+}: {
+  onNavigate?: () => void;
+  collapsed?: boolean;
+}) {
   const pathname = usePathname();
-
-  if (variant === "desktop") {
-    return (
-      <nav
-        aria-label="主导航"
-        className="hidden items-center gap-1 rounded-xl border border-stone-200 bg-white p-1 sm:flex"
-      >
-        {links.map(({ href, label, icon: Icon }) => {
-          const isCurrent = isCurrentPath(pathname, href);
-          return (
-            <Button
-              key={href}
-              variant="ghost"
-              size="sm"
-              nativeButton={false}
-              className={cn(
-                "rounded-lg px-3 text-stone-600",
-                // hover:text-white beats the ghost variant's hover:text-foreground,
-                // which would turn the label dark on the dark active pill.
-                isCurrent &&
-                  "bg-[#26231f] text-white shadow-sm hover:bg-stone-800 hover:text-white",
-              )}
-              render={
-                <Link
-                  href={href}
-                  aria-current={isCurrent ? "page" : undefined}
-                />
-              }
-            >
-              <Icon aria-hidden="true" />
-              {label}
-            </Button>
-          );
-        })}
-      </nav>
-    );
-  }
-
   return (
-    <nav
-      aria-label="主导航"
-      className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 grid grid-cols-2 rounded-2xl border border-stone-200 bg-white p-1.5 shadow-[0_10px_30px_rgba(28,25,23,0.12)] sm:hidden"
-    >
+    <nav aria-label="主导航" className="flex flex-col gap-2">
       {links.map(({ href, label, icon: Icon }) => {
-        const isCurrent = isCurrentPath(pathname, href);
+        const current = pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link
             key={href}
             href={href}
-            aria-current={isCurrent ? "page" : undefined}
+            title={label}
+            aria-label={label}
+            aria-current={current ? "page" : undefined}
+            onClick={onNavigate}
             className={cn(
-              "flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium text-stone-500 transition-colors",
-              isCurrent && "bg-stone-900 text-white",
+              "hover:bg-accent hover:text-accent-foreground flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors",
+              current
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground",
             )}
           >
-            <Icon className="size-4" aria-hidden="true" />
-            {label}
+            <Icon className="size-5 shrink-0" aria-hidden="true" />
+            {!collapsed && <span className="sidebar-label">{label}</span>}
           </Link>
         );
       })}

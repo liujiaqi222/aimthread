@@ -26,7 +26,7 @@ export function TimerPreferences({
         size="sm"
         aria-label="计时设置"
         onClick={() => setOpen(true)}
-        className="text-stone-600"
+        className="text-muted-foreground"
       >
         <SlidersHorizontal className="size-4" />
         计时设置
@@ -62,7 +62,7 @@ function PreferencesDrawer({
       onClose={onClose}
       labelledBy="timer-preferences-title"
       overlayClassName="fixed inset-0 z-50 flex items-end justify-end bg-black/30 sm:items-stretch"
-      panelClassName="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white p-6 shadow-xl sm:max-h-dvh sm:rounded-none sm:p-8"
+      panelClassName="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-card p-6 shadow-xl sm:max-h-dvh sm:rounded-none sm:p-8"
     >
       <div className="flex items-center justify-between">
         <h2 id="timer-preferences-title" className="text-2xl font-semibold">
@@ -77,9 +77,9 @@ function PreferencesDrawer({
           <X />
         </Button>
       </div>
-      <p className="mt-3 text-left text-sm leading-6 text-stone-600">
+      <p className="text-muted-foreground mt-3 text-left text-sm leading-6">
         {running
-          ? "时长、轮数与长休息修改下次执行生效。当前过程继续使用开始时的配置。"
+          ? "时长与轮数修改下次执行生效。当前过程继续使用开始时的配置。"
           : "安排这次想专注的轮数。阶段到时后，等你选择再继续。"}
       </p>
       <form
@@ -112,13 +112,12 @@ function PreferencesDrawer({
           [
             ["focusMinutes", "专注"],
             ["shortBreakMinutes", "短休息"],
-            ["longBreakMinutes", "长休息"],
             ["iterations", "专注轮数"],
           ] as const
         ).map(([key, label]) => (
           <label
             key={key}
-            className="flex items-center justify-between gap-4 rounded-2xl border border-stone-200 bg-stone-50 p-4 text-sm"
+            className="border-border bg-muted flex items-center justify-between gap-4 rounded-2xl border p-4 text-sm"
           >
             <span>{label}</span>
             <span className="flex items-center gap-1">
@@ -126,7 +125,7 @@ function PreferencesDrawer({
                 type="button"
                 aria-label={`减少${label}`}
                 disabled={draft[key] <= 1}
-                className="rounded-lg p-2 hover:bg-stone-200 disabled:opacity-30"
+                className="hover:bg-accent rounded-lg p-2 disabled:opacity-30"
                 onClick={() =>
                   setDraft({
                     ...draft,
@@ -147,13 +146,13 @@ function PreferencesDrawer({
                 onChange={(e) =>
                   setDraft({ ...draft, [key]: e.target.valueAsNumber })
                 }
-                className="w-14 rounded-lg border border-stone-300 p-2 text-center focus-visible:outline-2 focus-visible:outline-[#d85c41]"
+                className="border-input focus-visible:outline-primary w-14 rounded-lg border p-2 text-center focus-visible:outline-2"
               />
               <button
                 type="button"
                 aria-label={`增加${label}`}
                 disabled={draft[key] >= (key === "iterations" ? 12 : 180)}
-                className="rounded-lg p-2 hover:bg-stone-200 disabled:opacity-30"
+                className="hover:bg-accent rounded-lg p-2 disabled:opacity-30"
                 onClick={() =>
                   setDraft({
                     ...draft,
@@ -169,20 +168,10 @@ function PreferencesDrawer({
             </span>
           </label>
         ))}
-        <label className="flex items-center justify-between gap-4 text-sm">
-          每四段专注后提供长休息
-          <input
-            type="checkbox"
-            checked={draft.longBreakEnabled}
-            onChange={(e) =>
-              setDraft({ ...draft, longBreakEnabled: e.target.checked })
-            }
-          />
-        </label>
-        <div className="space-y-4 rounded-2xl bg-[#fdf6f1] p-4">
-          <p className="text-sm text-stone-600">
+        <div className="bg-accent space-y-4 rounded-2xl p-4">
+          <p className="text-muted-foreground text-sm">
             预计用时{" "}
-            <span className="font-medium text-stone-900">
+            <span className="text-foreground font-medium">
               {timerConfigSchema.safeParse(draft).success
                 ? plannedPhases(draft).reduce(
                     (sum, phase) => sum + phase.minutes,
@@ -197,14 +186,14 @@ function PreferencesDrawer({
           )}
         </div>
         {error && (
-          <p role="alert" className="text-sm text-red-700">
+          <p role="alert" className="text-destructive text-sm">
             {error}
           </p>
         )}
         <Button
           disabled={saving}
           type="submit"
-          className="w-full bg-[#d85c41] text-white hover:bg-[#c84f36]"
+          className="bg-primary text-primary-foreground hover:bg-primary/90 w-full"
         >
           {saving ? "保存中…" : "保存设置"}
         </Button>

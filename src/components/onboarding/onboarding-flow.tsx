@@ -51,9 +51,9 @@ export function OnboardingFlow({ endpoint }: { endpoint: string }) {
 
   if (!hydrated) {
     return (
-      <main className="grid min-h-screen place-items-center bg-[#f4f1ea]">
+      <main className="bg-background grid min-h-screen place-items-center">
         <Loader2
-          className="size-5 animate-spin text-stone-400"
+          className="text-muted-foreground size-5 animate-spin"
           aria-label="正在恢复引导"
         />
       </main>
@@ -143,16 +143,16 @@ function HydratedOnboardingFlow({ endpoint }: { endpoint: string }) {
   };
 
   return (
-    <main className="min-h-screen bg-[#f4f1ea] px-5 py-8 sm:py-12">
+    <main className="bg-background min-h-screen px-5 py-8 sm:py-12">
       <div className="mx-auto max-w-3xl">
         <header className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm font-semibold text-stone-900">
-            <span className="grid size-8 place-items-center rounded-xl bg-stone-950 text-white">
+          <div className="text-foreground flex items-center gap-2 text-sm font-semibold">
+            <span className="bg-foreground text-primary-foreground grid size-8 place-items-center rounded-xl">
               <Target className="size-4" aria-hidden="true" />
             </span>
             AimThread
           </div>
-          <span className="font-mono text-xs tracking-[0.16em] text-stone-400 uppercase">
+          <span className="text-muted-foreground font-mono text-xs tracking-[0.16em] uppercase">
             {draft.step === "goal"
               ? "第一幕"
               : draft.step === "reason"
@@ -161,12 +161,14 @@ function HydratedOnboardingFlow({ endpoint }: { endpoint: string }) {
           </span>
         </header>
 
-        <section className="mt-10 rounded-[2rem] border border-stone-200 bg-white px-5 py-8 shadow-[0_18px_50px_rgba(28,25,23,0.07)] sm:mt-14 sm:px-10 sm:py-12">
+        <section className="border-border bg-card mt-10 rounded-2xl border px-5 py-8 shadow-[0_18px_50px_rgba(28,25,23,0.07)] sm:mt-14 sm:px-10 sm:py-12">
           {draft.step === "goal" && (
             <GoalStep
               title={draft.title}
               onTitleChange={(title) => setDraft({ ...draft, title })}
-              onContinue={() => setStep("reason")}
+              onContinue={() => void saveManualGoal()}
+              busy={busy}
+              error={error}
               onAi={() => setStep("ai")}
             />
           )}
@@ -203,25 +205,37 @@ function GoalStep({
   onTitleChange,
   onContinue,
   onAi,
+  busy,
+  error,
 }: {
   title: string;
   onTitleChange: (value: string) => void;
   onContinue: () => void;
   onAi: () => void;
+  busy: boolean;
+  error?: string;
 }) {
   return (
     <div className="mx-auto max-w-xl text-center">
-      <p className="text-sm font-medium text-[#b54b35]">
-        先确定一件真正想推进的事
-      </p>
-      <h1 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-balance text-stone-950 sm:text-5xl sm:leading-tight">
-        最近，有什么事是你真的想推进的？
+      <p className="text-primary text-sm font-medium">从计划到执行</p>
+      <h1 className="text-foreground mt-4 text-3xl font-semibold tracking-[-0.04em] text-balance sm:text-5xl sm:leading-tight">
+        把计划接到这里，开始推进。
       </h1>
-      <p className="mx-auto mt-4 max-w-md leading-7 text-stone-500">
-        不需要先拆计划，也不用填写期限。一个清楚的标题就够了。
+      <p className="text-muted-foreground mx-auto mt-4 max-w-md leading-7">
+        在外部 AI 中准备好计划，或先用一个目标标题开始。
       </p>
+      <Button
+        type="button"
+        size="lg"
+        onClick={onAi}
+        className="mt-7 h-12 w-full"
+      >
+        <Bot className="size-4" />
+        连接外部 AI，导入计划
+      </Button>
+      <p className="text-muted-foreground mt-7 text-sm">也可以手动创建目标</p>
       <form
-        className="mt-9"
+        className="mt-4"
         onSubmit={(event) => {
           event.preventDefault();
           if (title.trim()) onContinue();
@@ -234,7 +248,7 @@ function GoalStep({
           autoFocus
           aria-label="目标标题"
           placeholder="我想推进…"
-          className="h-14 rounded-2xl border-stone-300 bg-stone-50 px-5 text-center text-lg shadow-none focus-visible:bg-white"
+          className="border-input bg-muted focus-visible:bg-card h-14 rounded-2xl px-5 text-center text-lg shadow-none"
         />
         <div className="mt-3 flex flex-wrap justify-center gap-2">
           {examples.map((example) => (
@@ -242,7 +256,7 @@ function GoalStep({
               type="button"
               key={example}
               onClick={() => onTitleChange(example)}
-              className="rounded-full border border-stone-200 px-3 py-1.5 text-xs text-stone-500 hover:border-stone-300 hover:text-stone-800"
+              className="border-border text-muted-foreground hover:border-input hover:text-foreground rounded-full border px-3 py-1.5 text-xs"
             >
               {example}
             </button>
@@ -251,21 +265,18 @@ function GoalStep({
         <Button
           type="submit"
           size="lg"
-          disabled={!title.trim()}
+          disabled={busy || !title.trim()}
           className="mt-8 h-12 rounded-full px-7"
         >
-          继续
+          {busy ? "正在保存…" : "保存目标，准备开始"}
           <ArrowRight className="size-4" aria-hidden="true" />
         </Button>
       </form>
-      <button
-        type="button"
-        onClick={onAi}
-        className="mt-7 inline-flex items-center gap-2 text-sm text-stone-500 underline decoration-stone-300 underline-offset-4 hover:text-stone-900"
-      >
-        <Bot className="size-4" aria-hidden="true" />
-        我想先和 ChatGPT 聊清楚
-      </button>
+      {error && (
+        <p role="alert" className="text-destructive mt-4 text-sm">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -287,26 +298,26 @@ function ReasonStep({
 }) {
   return (
     <div className="mx-auto max-w-xl">
-      <p className="text-sm font-medium text-[#b54b35]">让它对你更有意义</p>
-      <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-stone-950 sm:text-4xl">
+      <p className="text-primary text-sm font-medium">让它对你更有意义</p>
+      <h1 className="text-foreground mt-3 text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">
         如果做成，你最期待的变化是什么？
       </h1>
-      <p className="mt-3 leading-7 text-stone-500">
+      <p className="text-muted-foreground mt-3 leading-7">
         可选。它会成为目标说明，不影响你马上开始。
       </p>
 
-      <div className="mt-7 rounded-2xl border border-[#eaded7] bg-[#fdf7f3] p-5">
-        <p className="text-xs font-semibold tracking-[0.16em] text-[#b54b35] uppercase">
+      <div className="border-border bg-accent mt-7 rounded-2xl border p-5">
+        <p className="text-primary text-xs font-semibold tracking-[0.16em] uppercase">
           目标正在成形
         </p>
-        <p className="mt-2 text-xl font-semibold text-stone-950">
+        <p className="text-foreground mt-2 text-xl font-semibold">
           {draft.title.trim()}
         </p>
       </div>
 
       <label
         htmlFor="goal-reason"
-        className="mt-7 block text-sm font-medium text-stone-700"
+        className="text-foreground mt-7 block text-sm font-medium"
       >
         我最期待的是
       </label>
@@ -317,11 +328,11 @@ function ReasonStep({
         maxLength={10_000}
         rows={4}
         placeholder="例如：每天打开电脑时，知道下一步该做什么。"
-        className="mt-2 w-full resize-none rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-base leading-7 outline-none focus:border-stone-500 focus:bg-white"
+        className="border-input bg-muted focus:border-ring focus:bg-card mt-2 w-full resize-none rounded-2xl border px-4 py-3 text-base leading-7 outline-none"
       />
 
       {error && (
-        <p role="alert" className="mt-4 text-sm text-red-700">
+        <p role="alert" className="text-destructive mt-4 text-sm">
           {error}
         </p>
       )}
@@ -369,21 +380,21 @@ function AiStep({
   onCheck: () => void;
   onChoose: (goalId: string) => void;
 }) {
-  const prompt = `请和我一起讨论一个真正想推进的目标。先帮我把目标和第一个可执行步骤聊清楚，不要一次生成很多任务。只有在我明确确认后，才调用 AimThread 的 goal_create；如果需要再调用 tasks_create，最后用 selection_set 选中它。`;
+  const prompt = `请把我们已经确认的计划写入 AimThread。先检查已有目标与任务，避免创建重复项；确认要写入的内容后，使用 goal_create 和 tasks_create 保存目标、任务说明与资源，再用 selection_set 选中本次工作。不要自动开始计时，也不要把计时结束当成任务完成。`;
   return (
     <div className="mx-auto max-w-2xl">
       <div className="flex items-start gap-4">
-        <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-stone-950 text-white">
+        <span className="bg-foreground text-primary-foreground grid size-11 shrink-0 place-items-center rounded-2xl">
           <Sparkles className="size-5" aria-hidden="true" />
         </span>
         <div>
-          <p className="text-sm font-medium text-[#b54b35]">ChatGPT MCP App</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-[-0.035em] text-stone-950 sm:text-4xl">
-            先聊清楚，再写回目标
+          <p className="text-primary text-sm font-medium">ChatGPT MCP App</p>
+          <h1 className="text-foreground mt-1 text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">
+            把已有计划写入 AimThread
           </h1>
         </div>
       </div>
-      <p className="mt-5 leading-7 text-stone-600">
+      <p className="text-muted-foreground mt-5 leading-7">
         ChatGPT
         会通过安全授权访问这个实例。连接成功不等于目标已经保存；最后仍要回到这里检查真实数据。
       </p>
@@ -397,14 +408,14 @@ function AiStep({
             href="https://chatgpt.com/plugins"
             target="_blank"
             rel="noreferrer"
-            className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-stone-900 underline decoration-stone-300 underline-offset-4"
+            className="text-foreground decoration-border mt-2 inline-flex items-center gap-1 text-sm font-medium underline underline-offset-4"
           >
             打开 ChatGPT Plugins
             <ExternalLink className="size-3.5" aria-hidden="true" />
           </a>
           <CopyValue value={endpoint} label="复制 MCP 地址" />
         </AiInstruction>
-        <AiInstruction number="2" title="从一段克制的对话开始">
+        <AiInstruction number="2" title="将确认好的计划写回">
           <CopyValue value={prompt} label="复制开场话术" multiline />
         </AiInstruction>
         <AiInstruction number="3" title="确认写入后，回到这里检查">
@@ -429,7 +440,7 @@ function AiStep({
       {(message || error) && (
         <p
           role={error ? "alert" : "status"}
-          className={`mt-5 rounded-xl p-4 text-sm leading-6 ${error ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-900"}`}
+          className={`mt-5 rounded-xl p-4 text-sm leading-6 ${error ? "bg-destructive/10 text-destructive" : "bg-accent text-accent-foreground"}`}
         >
           {error ?? message}
         </p>
@@ -440,13 +451,13 @@ function AiStep({
           {candidates.map((candidate) => (
             <div
               key={candidate.goal.id}
-              className="rounded-2xl border border-stone-200 bg-stone-50 p-4 sm:flex sm:items-center sm:justify-between sm:gap-4"
+              className="border-border bg-muted rounded-2xl border p-4 sm:flex sm:items-center sm:justify-between sm:gap-4"
             >
               <div>
-                <p className="font-semibold text-stone-950">
+                <p className="text-foreground font-semibold">
                   {candidate.goal.title}
                 </p>
-                <p className="mt-1 text-sm text-stone-500">
+                <p className="text-muted-foreground mt-1 text-sm">
                   {candidate.pendingTaskCount > 0
                     ? `${candidate.pendingTaskCount} 个待办任务${candidate.firstTask ? ` · 下一步：${candidate.firstTask.title}` : ""}`
                     : "还没有任务，可以直接围绕目标开始"}
@@ -489,13 +500,13 @@ function AiInstruction({
   children: React.ReactNode;
 }) {
   return (
-    <li className="rounded-2xl border border-stone-200 p-4 sm:p-5">
+    <li className="border-border rounded-2xl border p-4 sm:p-5">
       <div className="flex gap-3">
-        <span className="grid size-7 shrink-0 place-items-center rounded-full bg-stone-100 font-mono text-xs text-stone-600">
+        <span className="bg-muted text-muted-foreground grid size-7 shrink-0 place-items-center rounded-full font-mono text-xs">
           {number}
         </span>
-        <div className="min-w-0 flex-1 text-sm leading-6 text-stone-600">
-          <h2 className="font-semibold text-stone-900">{title}</h2>
+        <div className="text-muted-foreground min-w-0 flex-1 text-sm leading-6">
+          <h2 className="text-foreground font-semibold">{title}</h2>
           <div className="mt-1">{children}</div>
         </div>
       </div>
@@ -519,7 +530,7 @@ function CopyValue({
     window.setTimeout(() => setCopied(false), 1400);
   };
   return (
-    <div className="mt-3 flex items-start gap-2 rounded-xl bg-stone-950 p-3 text-stone-100">
+    <div className="bg-foreground text-primary-foreground mt-3 flex items-start gap-2 rounded-xl p-3">
       <code
         className={`min-w-0 flex-1 font-mono text-xs leading-5 break-all whitespace-pre-wrap ${multiline ? "max-h-32 overflow-y-auto" : ""}`}
       >
@@ -531,7 +542,7 @@ function CopyValue({
         size="icon-sm"
         onClick={() => void copy()}
         aria-label={label}
-        className="shrink-0 text-stone-300 hover:bg-white/10 hover:text-white"
+        className="text-muted-foreground hover:bg-card/10 hover:text-primary-foreground shrink-0"
       >
         {copied ? (
           <Check className="size-4" aria-hidden="true" />

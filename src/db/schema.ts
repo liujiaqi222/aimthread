@@ -89,6 +89,7 @@ export const tasks = pgTable(
     status: taskStatus("status").default("pending").notNull(),
     position: integer("position").notNull(),
     estimatedMinutes: integer("estimated_minutes"),
+    initialEstimatedMinutes: integer("initial_estimated_minutes"),
     resourceType: resourceType("resource_type"),
     resourceValue: text("resource_value"),
     note: text("note"),
@@ -100,6 +101,10 @@ export const tasks = pgTable(
     check(
       "tasks_estimated_minutes_positive",
       sql`${table.estimatedMinutes} is null or ${table.estimatedMinutes} > 0`,
+    ),
+    check(
+      "tasks_initial_estimated_minutes_positive",
+      sql`${table.initialEstimatedMinutes} is null or ${table.initialEstimatedMinutes} > 0`,
     ),
     check(
       "tasks_resource_pair",

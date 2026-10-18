@@ -1,4 +1,7 @@
 "use client";
+import { ExecutionTimeline } from "@/components/history/execution-timeline";
+import { PeriodReport } from "@/components/history/period-report";
+import type { ReportPeriod } from "@/shared/report-period";
 import { HistorySelect } from "@/components/history/history-select";
 import Link from "next/link";
 import { useState, useTransition } from "react";
@@ -34,16 +37,6 @@ type Day = {
   page: SessionPage;
   completed: CompletedPage;
 };
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs text-stone-500">{label}</p>
-      <p className="mt-2 text-xl font-semibold tracking-tight break-words sm:text-2xl">
-        {value}
-      </p>
-    </div>
-  );
-}
 function SessionList({
   sessions,
   timezone,
@@ -53,8 +46,22 @@ function SessionList({
   timezone: string;
   onOpen: (id: string) => void;
 }) {
-  const groups = new Map<string, HistorySession[]>();
-  for (const session of sessions) {
+  const records = sessions.flatMap<
+    HistorySession & { recordId: string; round: number | null }
+  >((session) =>
+    session.focusRounds?.length && session.status !== "cancelled"
+      ? session.focusRounds.map((round) => ({
+          ...session,
+          id: `${session.id}:${round.id}`,
+          recordId: session.id,
+          startedAt: round.startedAt,
+          durationSeconds: round.focusSeconds,
+          round: round.round,
+        }))
+      : [{ ...session, recordId: session.id, round: null }],
+  );
+  const groups = new Map<string, typeof records>();
+  for (const session of records) {
     const key = localDateKey(new Date(session.startedAt), timezone);
     groups.set(key, [...(groups.get(key) ?? []), session]);
   }
@@ -62,33 +69,36 @@ function SessionList({
     <div className="space-y-6">
       {[...groups].map(([date, rows]) => (
         <section key={date}>
-          <h3 className="mb-3 text-xs font-medium text-stone-500">{date}</h3>
+          <h3 className="text-muted-foreground mb-3 text-xs font-medium">
+            {date}
+          </h3>
           <ul className="space-y-2">
             {rows.map((s) => (
               <li
                 key={s.id}
-                className="rounded-xl border border-stone-200 bg-white"
+                className="border-border bg-card rounded-xl border"
               >
                 <button
                   type="button"
-                  onClick={() => onOpen(s.id)}
-                  className="flex w-full items-start justify-between gap-3 rounded-xl p-4 text-left hover:bg-stone-50 focus-visible:outline-2 focus-visible:outline-[#537d61]"
+                  onClick={() => onOpen(s.recordId)}
+                  className="hover:bg-muted focus-visible:outline-primary flex w-full items-start justify-between gap-3 rounded-xl p-4 text-left focus-visible:outline-2"
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium break-words">
                       {s.task?.title ?? s.intent ?? s.goal.title}
                     </p>
-                    <p className="mt-1 text-xs break-words text-stone-500">
-                      {s.goal.title} · {timeBasisLabel[s.timeBasis]}
+                    <p className="text-muted-foreground mt-1 text-xs break-words">
+                      {s.goal.title} · {s.round ? `第 ${s.round} 轮 · ` : ""}
+                      {timeBasisLabel[s.timeBasis]}
                       {s.status === "cancelled" ? " · 已取消" : ""}
                     </p>
                     {(s.note || s.resumeHint) && (
-                      <p className="mt-2 line-clamp-2 text-xs leading-5 break-words text-stone-500">
+                      <p className="text-muted-foreground mt-2 line-clamp-2 text-xs leading-5 break-words">
                         {s.resumeHint ? `下次：${s.resumeHint}` : s.note}
                       </p>
                     )}
                   </div>
-                  <span className="shrink-0 text-xs text-stone-600">
+                  <span className="text-muted-foreground shrink-0 text-xs">
                     {s.status === "active"
                       ? "执行中"
                       : s.status === "paused"
@@ -116,14 +126,14 @@ function CompletedList({
       {items.map((t) => (
         <li
           key={t.id}
-          className="flex items-start gap-3 rounded-xl bg-[#edf3ee] p-4"
+          className="bg-accent flex items-start gap-3 rounded-xl p-4"
         >
-          <span aria-hidden="true" className="text-[#537d61]">
+          <span aria-hidden="true" className="text-primary">
             ✓
           </span>
           <div className="min-w-0">
             <p className="text-sm font-medium break-words">{t.title}</p>
-            <p className="mt-1 text-xs break-words text-stone-500">
+            <p className="text-muted-foreground mt-1 text-xs break-words">
               {t.goal.title} ·{" "}
               {localDateKey(new Date(t.completedAt!), timezone)}
             </p>
@@ -134,8 +144,10 @@ function CompletedList({
   );
 }
 export function HistoryView({
+  report,
+  period,
+  date,
   all,
-  week,
   calendar,
   page,
   targets,
@@ -143,6 +155,9 @@ export function HistoryView({
   includeCancelled,
   selectedGoalId,
 }: {
+  report: Statistics;
+  period: ReportPeriod;
+  date: string;
   all: Statistics;
   week: Statistics;
   calendar: Statistics;
@@ -167,7 +182,7 @@ export function HistoryView({
     includeCancelled?: boolean;
     goalId?: string;
   }) {
-    const search = new URLSearchParams();
+    const search = new URLSearchParams({ period, date });
     const goal = params.goalId ?? selectedGoalId;
     if (goal) search.set("goalId", goal);
     if (params.includeCancelled ?? includeCancelled)
@@ -215,13 +230,13 @@ export function HistoryView({
     <div className="mx-auto max-w-5xl space-y-7 pb-8">
       <header className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="font-mono text-xs tracking-[0.18em] text-stone-500">
+          <p className="text-muted-foreground font-mono text-xs tracking-[0.18em]">
             足迹
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
             时间留下的痕迹
           </h1>
-          <p className="mt-3 text-sm break-words text-stone-500">
+          <p className="text-muted-foreground mt-3 text-sm break-words">
             {selectedGoalId
               ? targets.find((t) => t.goal.id === selectedGoalId)?.goal.title
               : "每一次开始，都有真实的积累。"}
@@ -233,27 +248,40 @@ export function HistoryView({
           </Button>
         )}
       </header>
-      <section
-        aria-label="投入摘要"
-        className="grid grid-cols-2 gap-x-5 gap-y-6 rounded-2xl bg-[#edf3ee] px-5 py-6 sm:grid-cols-4 sm:px-7"
-      >
-        <Stat
-          label="累计投入"
-          value={formatHumanDuration(all.totalFocusSeconds)}
-        />
-        <Stat label="本周投入" value={durationLabel(week.totalFocusSeconds)} />
-        <Stat label="累计有效执行" value={`${all.sessionCount} 次`} />
-        <Stat label="本周完成事项" value={`${week.completedTaskCount} 件`} />
-      </section>
-      <ActivityCalendar
-        daily={calendar.daily}
-        today={today}
-        weekStartsOn={calendar.weekStartsOn}
-        onDay={(date) => openDay(date)}
+      <PeriodReport
+        stats={report}
+        period={period}
+        date={date}
+        goalId={selectedGoalId}
       />
+      {period === "day" && (
+        <ExecutionTimeline
+          sessions={page.items}
+          timezone={timezone}
+          date={date}
+          onOpen={openRecord}
+        />
+      )}
+      <details className="border-border rounded-xl border p-4">
+        <summary className="text-muted-foreground cursor-pointer text-sm">
+          活动日历与累计投入 · {formatHumanDuration(all.totalFocusSeconds)}
+        </summary>
+        <div className="mt-5">
+          <ActivityCalendar
+            daily={calendar.daily}
+            today={today}
+            weekStartsOn={calendar.weekStartsOn}
+            onDay={(value) =>
+              router.push(
+                `/history?period=day&date=${value}${selectedGoalId ? `&goalId=${selectedGoalId}` : ""}`,
+              )
+            }
+          />
+        </div>
+      </details>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <details className="w-full rounded-xl border border-stone-200 bg-white p-4">
-          <summary className="cursor-pointer text-sm text-stone-600">
+        <details className="border-border bg-card w-full rounded-xl border p-4">
+          <summary className="text-muted-foreground cursor-pointer text-sm">
             {selectedGoalId
               ? `筛选目标：${targets.find((t) => t.goal.id === selectedGoalId)?.goal.title ?? "已选目标"}`
               : "按目标查看 / 取消审计"}
@@ -304,43 +332,21 @@ export function HistoryView({
         </details>
       </div>
       {pending && (
-        <p role="status" className="text-sm text-stone-500">
+        <p role="status" className="text-muted-foreground text-sm">
           正在读取记录…
         </p>
       )}
       {error && (
         <p
           role="alert"
-          className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900"
+          className="bg-accent text-accent-foreground rounded-xl p-4 text-sm"
         >
           {error}
         </p>
       )}
-      {all.byGoal.length > 0 && (
-        <details className="rounded-xl border border-stone-200 bg-white p-4">
-          <summary className="cursor-pointer text-sm font-medium">
-            目标投入
-          </summary>
-          <ul className="mt-4 space-y-4">
-            {all.byGoal.map((g) => (
-              <li key={g.goalId}>
-                <div className="flex items-start justify-between gap-3 text-sm">
-                  <span className="min-w-0 break-words">{g.title}</span>
-                  <span className="shrink-0">
-                    {durationLabel(g.focusSeconds)}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-stone-500">
-                  {g.sessionCount} 次执行 · {g.completedTaskCount} 件完成事项
-                </p>
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
       {targets.length === 0 ? (
         <section className="rounded-2xl border border-dashed p-8 text-center">
-          <p className="text-stone-600">从一个想推进的目标开始。</p>
+          <p className="text-muted-foreground">从一个想推进的目标开始。</p>
           <Link
             href="/onboarding"
             className="mt-3 inline-block text-sm underline"
@@ -350,8 +356,8 @@ export function HistoryView({
         </section>
       ) : (
         <div className="grid gap-8 lg:grid-cols-[1.6fr_1fr]">
-          <section aria-label="最近执行">
-            <h2 className="mb-5 text-lg font-semibold">最近执行</h2>
+          <section aria-label="本期执行">
+            <h2 className="mb-5 text-lg font-semibold">本期执行</h2>
             {page.items.length ? (
               <SessionList
                 sessions={page.items}
@@ -359,7 +365,7 @@ export function HistoryView({
                 onOpen={openRecord}
               />
             ) : (
-              <div className="rounded-xl border border-dashed p-6 text-sm leading-6 text-stone-500">
+              <div className="text-muted-foreground rounded-xl border border-dashed p-6 text-sm leading-6">
                 <p>还没有执行记录。先投入一小段时间，足迹就会留在这里。</p>
                 <Link href="/today" className="mt-3 inline-block underline">
                   回到执行
@@ -377,13 +383,15 @@ export function HistoryView({
           </section>
           <section aria-label="完成事项">
             <h2 className="mb-5 text-lg font-semibold">完成事项</h2>
-            <p className="mb-4 text-xs leading-5 text-stone-500">
+            <p className="text-muted-foreground mb-4 text-xs leading-5">
               任务完成与执行次数分别记录。重新打开的任务不再计入完成事项。
             </p>
             {completed.items.length ? (
               <CompletedList items={completed.items} timezone={timezone} />
             ) : (
-              <p className="text-sm text-stone-400">还没有已完成的任务。</p>
+              <p className="text-muted-foreground text-sm">
+                还没有已完成的任务。
+              </p>
             )}
             {completed.nextCursor && (
               <Link
@@ -396,14 +404,14 @@ export function HistoryView({
           </section>
         </div>
       )}
-      <p className="text-xs text-stone-400">
+      <p className="text-muted-foreground text-xs">
         按 {timezone} 计算 · 暂停、休息、到时等待与取消记录不计入投入
       </p>
       {day && !detail && !adding && (
         <Modal
           labelledBy="day-title"
           onClose={() => setDay(null)}
-          panelClassName="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl sm:p-7"
+          panelClassName="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-card p-5 shadow-xl sm:p-7"
         >
           <div className="mb-5 flex items-center justify-between gap-3">
             <h2 id="day-title" className="text-xl font-semibold">
@@ -413,7 +421,7 @@ export function HistoryView({
               关闭
             </Button>
           </div>
-          <p className="mb-6 text-sm text-stone-600">
+          <p className="text-muted-foreground mb-6 text-sm">
             当天投入 {durationLabel(day.stats.totalFocusSeconds)} ·{" "}
             {day.stats.sessionCount} 次执行 · {day.stats.completedTaskCount}{" "}
             件完成事项
@@ -425,12 +433,14 @@ export function HistoryView({
                 timezone={timezone}
                 onOpen={openRecord}
               />
-              <p className="mt-3 text-xs text-stone-500">
+              <p className="text-muted-foreground mt-3 text-xs">
                 记录卡片显示整次执行时长；上方摘要只计算当天投入。
               </p>
             </>
           ) : (
-            <p className="text-sm text-stone-500">这一天还没有有效投入。</p>
+            <p className="text-muted-foreground text-sm">
+              这一天还没有有效投入。
+            </p>
           )}
           {day.page.nextCursor && (
             <Button
@@ -461,7 +471,7 @@ export function HistoryView({
             </section>
           )}
           {error && (
-            <p role="alert" className="mt-4 text-sm text-amber-900">
+            <p role="alert" className="text-accent-foreground mt-4 text-sm">
               {error}
             </p>
           )}

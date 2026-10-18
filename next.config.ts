@@ -7,6 +7,7 @@ const isIsolated =
 
 const nextConfig: NextConfig = {
   ...(isIsolated ? { distDir: `.next-tests/${testSchema}` } : {}),
+  devIndicators: isIsolated ? false : { position: "bottom-right" },
   allowedDevOrigins: ["127.0.0.1"],
   reactCompiler: true,
 };

@@ -49,72 +49,68 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --background: #f4f5f9;
+  --foreground: #202435;
+  --card: #ffffff;
+  --card-foreground: #202435;
+  --popover: #ffffff;
+  --popover-foreground: #202435;
+  --primary: #5845d6;
+  --primary-foreground: #ffffff;
+  --secondary: #eaecf3;
+  --secondary-foreground: #202435;
+  --muted: #eaecf3;
+  --muted-foreground: #626a80;
+  --accent: #eae6ff;
+  --accent-foreground: #4533b4;
+  --destructive: #b42342;
+  --border: #d9ddea;
+  --input: #8992a8;
+  --ring: #5845d6;
+  --chart-1: #5845d6;
+  --chart-2: #3975b7;
+  --chart-3: #8a579c;
+  --chart-4: #626a80;
+  --chart-5: #a0644e;
+  --radius: 0.75rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #626a80;
+  --sidebar-primary: #5845d6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eae6ff;
+  --sidebar-accent-foreground: #4533b4;
+  --sidebar-border: #d9ddea;
+  --sidebar-ring: #5845d6;
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+.dark,
+.focus-scene,
+:root:has(.focus-scene),
+.app-shell:has(.focus-scene) {
+  color-scheme: dark;
+  --background: #151824;
+  --foreground: #f2f3fa;
+  --card: #1e2232;
+  --card-foreground: #f2f3fa;
+  --popover: #1e2232;
+  --popover-foreground: #f2f3fa;
+  --primary: #c2b7ff;
+  --primary-foreground: #211a49;
+  --secondary: #282d40;
+  --secondary-foreground: #f2f3fa;
+  --muted: #282d40;
+  --muted-foreground: #b3bbd0;
+  --accent: #332d50;
+  --accent-foreground: #d8d0ff;
+  --destructive: #ff9caf;
+  --border: #394157;
+  --input: #66718e;
+  --ring: #c2b7ff;
+  --sidebar: #151824;
+  --sidebar-foreground: #b3bbd0;
+  --sidebar-accent: #332d50;
+  --sidebar-accent-foreground: #d8d0ff;
+  --sidebar-border: #394157;
 }
 
 @layer base {
@@ -234,5 +230,49 @@
   .completion-check-enter,
   .completion-check-ring {
     animation: none;
+  }
+}
+
+/* The scene follows the actual running panel, including refresh recovery. */
+.app-shell:has(.focus-scene) {
+  background: #151824;
+}
+/* Manual collapse stays available in both preparation and focus scenes. */
+.app-sidebar {
+  transition:
+    width 200ms ease,
+    padding 200ms ease;
+}
+.app-content {
+  transition: margin-left 200ms ease;
+}
+.app-shell[data-sidebar-collapsed="true"] .app-sidebar {
+  width: 72px;
+  padding-inline: 12px;
+}
+.app-shell[data-sidebar-collapsed="true"] .app-sidebar .sidebar-label,
+.app-shell[data-sidebar-collapsed="true"] .sidebar-brand {
+  display: none;
+}
+.app-shell[data-sidebar-collapsed="true"] .sidebar-header {
+  justify-content: center;
+}
+.app-shell[data-sidebar-collapsed="true"] .app-sidebar a {
+  justify-content: center;
+  padding-inline: 12px;
+}
+.app-shell[data-sidebar-collapsed="true"] .app-sidebar form button {
+  width: 100%;
+  padding-inline: 0;
+}
+@media (min-width: 768px) {
+  .app-shell[data-sidebar-collapsed="true"] .app-content {
+    margin-left: 72px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-sidebar,
+  .app-content {
+    transition: none;
   }
 }

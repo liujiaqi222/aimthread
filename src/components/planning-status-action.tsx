@@ -60,14 +60,19 @@ export function PlanningStatusAction({
         variant={variant}
         disabled={pending}
         className={
-          variant === "default" ? "bg-stone-900 text-stone-50" : undefined
+          variant === "default"
+            ? "bg-primary text-primary-foreground"
+            : undefined
         }
       >
         {iconElement}
         {pending ? "处理中…" : label}
       </Button>
       {state?.status === "error" && (
-        <span role="alert" className="max-w-64 text-left text-xs text-red-600">
+        <span
+          role="alert"
+          className="text-destructive max-w-64 text-left text-xs"
+        >
           {state.message}
         </span>
       )}

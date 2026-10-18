@@ -13,9 +13,7 @@ export const timerConfigSchema = z
   .object({
     focusMinutes: z.number().int().min(1).max(180).default(25),
     shortBreakMinutes: z.number().int().min(1).max(180).default(5),
-    longBreakMinutes: z.number().int().min(1).max(180).default(15),
     iterations: z.number().int().min(1).max(12).default(4),
-    longBreakEnabled: z.boolean().default(true),
     soundEnabled: z.boolean().default(true),
   })
   .strict();
@@ -166,7 +164,7 @@ export const sessionUpdateSchema = z
 export const statsQuerySchema = z
   .object({
     period: z
-      .enum(["today", "week", "month", "custom", "all"])
+      .enum(["today", "week", "month", "year", "custom", "all"])
       .default("today"),
     goalId: z.string().uuid().optional(),
     timezone: timezoneSchema.optional(),

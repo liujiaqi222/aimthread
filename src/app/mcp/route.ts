@@ -18,6 +18,7 @@ import {
   sessionService,
   settingsService,
   statisticsService,
+  executionReportService,
 } from "@/services";
 
 export const runtime = "nodejs";
@@ -34,6 +35,7 @@ const handler = createMcpHandler(
       dashboardService,
       historyService,
       statisticsService,
+      executionReportService,
     }),
   {
     legacy: "reject",

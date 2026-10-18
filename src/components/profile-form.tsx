@@ -59,7 +59,7 @@ export function ProfileForm({ name }: { name: string }) {
             setError(undefined);
           }}
         />
-        <p className="text-sm text-stone-500">
+        <p className="text-muted-foreground text-sm">
           名称仅用于显示，不是登录账号；仍然使用实例密码登录。
         </p>
         <FieldError>{error}</FieldError>
@@ -68,7 +68,7 @@ export function ProfileForm({ name }: { name: string }) {
         <Button type="submit" disabled={pending}>
           {pending ? "正在保存…" : "保存名称"}
         </Button>
-        <span role="status" className="text-sm text-stone-600">
+        <span role="status" className="text-muted-foreground text-sm">
           {saved ? "名称已保存。" : ""}
         </span>
       </div>

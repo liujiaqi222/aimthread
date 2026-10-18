@@ -14,6 +14,7 @@ import { createDashboardService } from "@/services/dashboard";
 import { createSessionService } from "@/services/session";
 import { createHistoryService } from "@/services/history";
 import { createStatisticsService } from "@/services/statistics";
+import { createExecutionReportService } from "@/services/execution-report";
 import { planningContract } from "@/adapters/planning-contract";
 import { createAimThreadMcpServer } from "@/mcp/server";
 import { createMcpHandler } from "@modelcontextprotocol/server";
@@ -79,6 +80,7 @@ const transitionSessionService = createSessionService(transitionDatabase, {
   distractionService: transitionDistractionService,
 });
 const historyService = createHistoryService(database);
+const executionReportService = createExecutionReportService(database);
 const statisticsService = createStatisticsService(database, {
   settingsService,
 });
@@ -1151,6 +1153,136 @@ describe("history service and statistics", () => {
   });
 });
 
+describe("execution context and task estimate baseline", () => {
+  const web = { actor: "web" } as const;
+  const mcp = { actor: "mcp" } as const;
+
+  it("captures the first nonempty estimate and preserves it through edits, clears and reopen", async () => {
+    const goal = await planningService.createGoal(web, {
+      title: "Estimate baseline",
+    });
+    const [task] = await planningService.createTasks(mcp, {
+      goalId: goal.id,
+      tasks: [{ title: "Implement", estimatedMinutes: 120 }],
+    });
+    expect(task!.initialEstimatedMinutes).toBe(120);
+    const changed = await planningService.updateTask(web, {
+      id: task!.id,
+      estimatedMinutes: 240,
+    });
+    expect(changed.initialEstimatedMinutes).toBe(120);
+    await planningService.updateTask(mcp, {
+      id: task!.id,
+      estimatedMinutes: null,
+    });
+    await planningService.completeTask(web, task!.id);
+    await planningService.reopenTask(web, task!.id);
+    expect(
+      (
+        await planningService.updateTask(mcp, {
+          id: task!.id,
+          estimatedMinutes: 180,
+        })
+      ).initialEstimatedMinutes,
+    ).toBe(120);
+    const [unestimated] = await planningService.createTasks(web, {
+      goalId: goal.id,
+      tasks: [{ title: "Later estimate" }],
+    });
+    await planningService.updateTask(web, {
+      id: unestimated!.id,
+      title: "Still no estimate",
+    });
+    expect(
+      (
+        await planningService.updateTask(mcp, {
+          id: unestimated!.id,
+          estimatedMinutes: 30,
+        })
+      ).initialEstimatedMinutes,
+    ).toBe(30);
+  });
+
+  it("shares actual interval accounting, excludes cancelled/zero hints and does not revive an old checkpoint", async () => {
+    const goal = await planningService.createGoal(web, {
+      title: "Execution report",
+    });
+    const [task] = await planningService.createTasks(web, {
+      goalId: goal.id,
+      tasks: [{ title: "Implement", estimatedMinutes: 120 }],
+    });
+    const observedId = randomUUID();
+    await pool.query(
+      `insert into sessions(id,goal_id,task_id,status,entry_mode,created_via,timer_mode,time_basis,started_at,ended_at,duration_seconds) values($1,$2,$3,'completed','timer','web','pomodoro','observed','2026-06-01T08:00Z','2026-06-01T09:00Z',900)`,
+      [observedId, goal.id, task!.id],
+    );
+    await pool.query(
+      `insert into focus_intervals(session_id,phase,started_at,ended_at) values($1,'focus','2026-06-01T08:00Z','2026-06-01T08:10Z'),($1,'short_break','2026-06-01T08:10Z','2026-06-01T08:15Z'),($1,'focus','2026-06-01T08:30Z','2026-06-01T08:35Z')`,
+      [observedId],
+    );
+    await historyService.logSession(web, {
+      goalId: goal.id,
+      taskId: task!.id,
+      durationSeconds: 3600,
+      endedAt: "2026-06-01T10:00:00Z",
+      resumeHint: "STALE_CHECKPOINT",
+      note: "接口调通",
+    });
+    const corrected = await historyService.logSession(web, {
+      goalId: goal.id,
+      taskId: task!.id,
+      durationSeconds: 1800,
+      endedAt: "2026-06-01T11:00:00Z",
+    });
+    await pool.query(`update sessions set time_basis='corrected' where id=$1`, [
+      corrected.id,
+    ]);
+    await historyService.logSession(web, {
+      goalId: goal.id,
+      durationSeconds: 600,
+      endedAt: "2026-06-01T12:00:00Z",
+      resumeHint: "Goal-only continuation",
+    });
+    const cancelled = await historyService.logSession(web, {
+      goalId: goal.id,
+      taskId: task!.id,
+      durationSeconds: 600,
+      endedAt: "2026-06-01T13:00:00Z",
+      note: "CANCELLED_SECRET",
+    });
+    await sessionService.cancelSession(web, cancelled.id);
+    await pool.query(
+      `insert into sessions(goal_id,task_id,status,entry_mode,created_via,timer_mode,time_basis,started_at,ended_at,duration_seconds,resume_hint) values($1,$2,'completed','timer','web','stopwatch','observed','2026-06-01T14:00Z','2026-06-01T14:00Z',0,'ZERO_HINT')`,
+      [goal.id, task!.id],
+    );
+    const { report, markdown } = await executionReportService.getGoalContext(
+      mcp,
+      { goalId: goal.id },
+    );
+    expect(report.totalFocusSeconds).toBe(6900);
+    expect(report.tasks[0]!.focusSeconds).toBe(6300);
+    expect(report.tasks[0]!.resumeHint).toBeNull();
+    expect(report.goalOnlyResumeHint).toBe("Goal-only continuation");
+    expect(markdown).not.toContain("CANCELLED_SECRET");
+    expect(markdown).not.toContain("ZERO_HINT");
+    expect(markdown).toContain("接口调通");
+    expect(
+      (await executionReportService.getTaskFocusSeconds(web, [goal.id]))[
+        task!.id
+      ],
+    ).toBe(6300);
+    const stats = await statisticsService.getStatistics(web, {
+      period: "all",
+      goalId: goal.id,
+      now: report.generatedAt,
+    });
+    expect(stats.totalFocusSeconds).toBe(report.totalFocusSeconds);
+    await expect(
+      executionReportService.getGoalContext(web, { goalId: randomUUID() }),
+    ).rejects.toMatchObject({ code: "GOAL_NOT_FOUND" });
+  });
+});
+
 describe("MCP server over the real protocol", () => {
   const web = { actor: "web" } as const;
 
@@ -1164,6 +1296,7 @@ describe("MCP server over the real protocol", () => {
       dashboardService,
       historyService,
       statisticsService,
+      executionReportService,
     }),
   );
 
@@ -1248,6 +1381,7 @@ describe("MCP server over the real protocol", () => {
       "session_log",
       "session_update",
       "stats_get",
+      "goal_context_get",
     ]) {
       expect(names).toContain(required);
     }
@@ -1357,8 +1491,6 @@ describe("T08 pomodoro deadlines, concurrency and shared contracts", () => {
       timerPreferences: {
         focusMinutes: 25,
         shortBreakMinutes: 5,
-        longBreakMinutes: 15,
-        longBreakEnabled: true,
         soundEnabled: false,
         iterations,
       },
@@ -1517,8 +1649,6 @@ describe("T08 pomodoro deadlines, concurrency and shared contracts", () => {
       timerPreferences: {
         focusMinutes: 50,
         shortBreakMinutes: 10,
-        longBreakMinutes: 30,
-        longBreakEnabled: false,
         soundEnabled: false,
       },
     });
@@ -1540,15 +1670,13 @@ describe("T08 pomodoro deadlines, concurrency and shared contracts", () => {
     });
     expect(subsequent.phase?.remainingSeconds).toBe(3000);
   });
-  it("offers fourth-round long break once; skipping it makes the fifth break short", async () => {
+  it("uses short breaks after every round", async () => {
     let session = await start(6);
     for (let round = 1; round <= 5; round++) {
       step(1500);
       const read = await timer.getSession(mcp, session.id);
       expect(read.completedFocusCount).toBe(round);
-      expect(read.nextBreakKind).toBe(
-        round === 4 ? "long_break" : "short_break",
-      );
+      expect(read.nextBreakKind).toBe("short_break");
       expect(
         (await timer.getSession(web, session.id)).completedFocusCount,
       ).toBe(round);
@@ -1563,9 +1691,30 @@ describe("T08 pomodoro deadlines, concurrency and shared contracts", () => {
         expect(retry.phase!.id).toBe(session.phase!.id);
       }
     }
-    expect((await timer.finishSession(web, session.id)).durationSeconds).toBe(
-      7500,
-    );
+    const finished = await timer.finishSession(web, session.id);
+    expect(finished.durationSeconds).toBe(7500);
+    const history = await historyService.listSessions(web, {
+      goalId: session.goalId,
+      now: now.toISOString(),
+    });
+    expect(history.items).toHaveLength(1);
+    expect(history.items[0].focusRounds).toHaveLength(5);
+    expect(
+      history.items[0].focusRounds!.reduce(
+        (sum, round) => sum + round.focusSeconds,
+        0,
+      ),
+    ).toBe(7500);
+    const annual = await statisticsService.getStatistics(web, {
+      period: "year",
+      now: now.toISOString(),
+      goalId: session.goalId,
+      timezone: "UTC",
+      daily: true,
+    });
+    expect(annual.totalFocusSeconds).toBe(7500);
+    expect(annual.sessionCount).toBe(1);
+    expect(annual.daily).toHaveLength(365);
   });
   it.each([1, 4, 5])(
     "enforces %i rounds across Web/MCP and refuses a trailing break",

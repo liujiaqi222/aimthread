@@ -38,7 +38,7 @@ export interface DashboardData {
   serverNow: string;
   activeSession: SessionView | null;
   selection: DashboardSelection | null;
-  /** Resume hint for the idle continuation, null while a Session runs. */
+  /** Resume hint matched to the current execution context, including recovery. */
   resumeHint: string | null;
   /** A few pending Tasks of the selected Goal (PRD §5.1). */
   todos: Task[];
@@ -152,14 +152,12 @@ export function createDashboardService(
             )
             .orderBy(asc(tasks.position))
             .limit(8),
-          activeSession
-            ? Promise.resolve(null)
-            : resolved.taskId
-              ? latestResumeHint(database, { taskId: resolved.taskId })
-              : latestResumeHint(database, {
-                  goalId: resolved.goalId,
-                  goalOnly: true,
-                }),
+          resolved.taskId
+            ? latestResumeHint(database, { taskId: resolved.taskId })
+            : latestResumeHint(database, {
+                goalId: resolved.goalId,
+                goalOnly: true,
+              }),
         ]);
         const [goal] = goalRows;
         if (goal) {

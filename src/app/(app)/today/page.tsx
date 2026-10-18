@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 
 import { dashboardService } from "@/services";
 import { TodayView } from "@/components/today/today-view";
-import { pickTodayHeadline } from "@/shared/today-headlines";
 
 export default async function TodayPage({
   searchParams,
@@ -17,7 +16,7 @@ export default async function TodayPage({
   return (
     <TodayView
       initialDashboard={dashboard}
-      initialHeadline={pickTodayHeadline(Boolean(dashboard.activeSession))}
+      initialHeadline="选定工作，开始一段专注"
       firstRun={first === "1" && dashboard.todayStats.sessionCount === 0}
     />
   );

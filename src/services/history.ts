@@ -29,6 +29,10 @@ import {
   type Session,
   type Task,
 } from "@/db/schema";
+import {
+  focusRoundRecords,
+  type FocusRoundRecord,
+} from "@/shared/history-rounds";
 import { historyCursor, readHistoryCursor } from "@/services/history-cursor";
 import { focusSecondsSql } from "@/services/focus-query";
 import { DomainError } from "@/shared/domain-error";
@@ -55,6 +59,8 @@ import {
  */
 
 export interface HistorySession extends Session {
+  focusRounds?: FocusRoundRecord[];
+  focusTimeline?: { startedAt: Date; endedAt: Date }[];
   goal: Goal;
   task: Task | null;
 }
@@ -307,9 +313,70 @@ export function createHistoryService(database: Database): HistoryService {
 
       const hasMore = rows.length > query.limit;
       const pageRows = rows.slice(0, query.limit);
+      const ids = pageRows
+        .filter((r) => r.session.timeBasis === "observed")
+        .map((r) => r.session.id);
+      const [phases, intervals] = ids.length
+        ? await Promise.all([
+            database
+              .select()
+              .from(sessionPhases)
+              .where(inArray(sessionPhases.sessionId, ids))
+              .orderBy(asc(sessionPhases.sequence)),
+            database
+              .select()
+              .from(focusIntervals)
+              .where(inArray(focusIntervals.sessionId, ids))
+              .orderBy(asc(focusIntervals.startedAt)),
+          ])
+        : [[], []];
+      const observedAt = query.now ? new Date(query.now) : new Date();
+
       return {
         items: pageRows.map((row) => ({
           ...row.session,
+          focusTimeline:
+            row.session.timeBasis === "observed"
+              ? intervals
+                  .filter(
+                    (i) =>
+                      i.sessionId === row.session.id && i.phase === "focus",
+                  )
+                  .map((i) => {
+                    const start = new Date(
+                      Math.max(
+                        i.startedAt.getTime(),
+                        query.dateMode === "focus" && from
+                          ? from.getTime()
+                          : -Infinity,
+                      ),
+                    );
+                    const end = new Date(
+                      Math.min(
+                        (i.endedAt ?? i.deadlineAt ?? observedAt).getTime(),
+                        i.deadlineAt?.getTime() ?? Infinity,
+                        observedAt.getTime(),
+                        query.dateMode === "focus" && to
+                          ? to.getTime()
+                          : Infinity,
+                      ),
+                    );
+                    return { startedAt: start, endedAt: end };
+                  })
+                  .filter((i) => i.endedAt > i.startedAt)
+              : undefined,
+          focusRounds:
+            row.session.timeBasis === "observed" &&
+            row.session.timerMode === "pomodoro"
+              ? focusRoundRecords(
+                  phases.filter((p) => p.sessionId === row.session.id),
+                  intervals.filter((i) => i.sessionId === row.session.id),
+                  observedAt,
+                  query.dateMode === "focus" && from && to
+                    ? { start: from, end: to }
+                    : undefined,
+                )
+              : undefined,
           goal: row.goal,
           task: row.task,
         })),
