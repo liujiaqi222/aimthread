@@ -14,6 +14,8 @@ export default defineConfig({
   globalSetup: "./tests/e2e/global-setup.ts",
   use: {
     baseURL: "http://127.0.0.1:3010",
+    // Fail a stale locator promptly instead of waiting for a long workflow's full timeout.
+    actionTimeout: 30_000,
     trace: "retain-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
