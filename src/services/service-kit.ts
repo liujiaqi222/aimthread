@@ -1,3 +1,4 @@
+import { requireUserId, type AuthenticatedContext } from "@/auth/context";
 import { sql } from "drizzle-orm";
 
 import type { Database } from "@/db/client";
@@ -42,6 +43,12 @@ export function parsed<T>(
   return result.data;
 }
 
-export async function lockScope(tx: Transaction, scope: string): Promise<void> {
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${scope}))`);
+export async function lockScope(
+  tx: Transaction,
+  context: AuthenticatedContext,
+  scope: string,
+): Promise<void> {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${JSON.stringify([requireUserId(context), scope])}))`,
+  );
 }

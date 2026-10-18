@@ -8,16 +8,16 @@ import type { Goal, Task } from "@/db/schema";
 import { planningService, selectionService } from "@/services";
 import type { Result } from "@/shared/result";
 
-const context = { actor: "web" } as const;
-
 export interface OnboardingCandidate {
   goal: Goal;
   firstTask: Task | null;
   pendingTaskCount: number;
 }
 
-async function authorize(): Promise<void> {
-  if (!(await readWebSession())) redirect("/login?next=/onboarding");
+async function authorize() {
+  const context = await readWebSession();
+  if (!context) redirect("/login?next=/onboarding");
+  return context;
 }
 
 export async function createOnboardingGoalAction(input: {
@@ -25,7 +25,7 @@ export async function createOnboardingGoalAction(input: {
   description?: string | null;
   idempotencyKey: string;
 }): Promise<Result<{ goal: Goal }>> {
-  await authorize();
+  const context = await authorize();
   return sessionContract(async () => {
     const goal = await planningService.createGoal(context, input);
     // Omitted taskId deliberately uses selection_set's automatic semantics.
@@ -38,7 +38,7 @@ export async function createOnboardingGoalAction(input: {
 export async function checkOnboardingGoalsAction(): Promise<
   Result<OnboardingCandidate[]>
 > {
-  await authorize();
+  const context = await authorize();
   return sessionContract(async () => {
     const page = await planningService.listGoals(context, {
       status: "active",
@@ -63,7 +63,7 @@ export async function checkOnboardingGoalsAction(): Promise<
 export async function selectOnboardingGoalAction(
   goalId: string,
 ): Promise<Result<{ goalId: string }>> {
-  await authorize();
+  const context = await authorize();
   return sessionContract(async () => {
     const selection = await selectionService.set(context, { goalId });
     return { goalId: selection.goal.id };

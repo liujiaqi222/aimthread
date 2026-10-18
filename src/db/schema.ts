@@ -17,6 +17,8 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
+import { user } from "@/db/auth-schema";
+
 export const goalStatus = pgEnum("goal_status", [
   "active",
   "completed",
@@ -65,6 +67,9 @@ export const goals = pgTable(
   "goals",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
     title: varchar("title", { length: 240 }).notNull(),
     description: text("description"),
     status: goalStatus("status").default("active").notNull(),
@@ -73,7 +78,12 @@ export const goals = pgTable(
   },
   (table) => [
     check("goals_position_positive", sql`${table.position} > 0`),
-    index("goals_status_position_idx").on(table.status, table.position),
+    unique("goals_id_user_unique").on(table.id, table.userId),
+    index("goals_status_position_idx").on(
+      table.userId,
+      table.status,
+      table.position,
+    ),
   ],
 );
 
@@ -129,6 +139,9 @@ export const sessions = pgTable(
   "sessions",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
     goalId: uuid("goal_id")
       .notNull()
       .references(() => goals.id, { onDelete: "restrict" }),
@@ -158,6 +171,11 @@ export const sessions = pgTable(
   },
   (table) => [
     foreignKey({
+      name: "sessions_goal_user_fk",
+      columns: [table.goalId, table.userId],
+      foreignColumns: [goals.id, goals.userId],
+    }),
+    foreignKey({
       name: "sessions_task_goal_fk",
       columns: [table.taskId, table.goalId],
       foreignColumns: [tasks.id, tasks.goalId],
@@ -166,21 +184,29 @@ export const sessions = pgTable(
       "sessions_duration_seconds_nonnegative",
       sql`${table.durationSeconds} is null or ${table.durationSeconds} >= 0`,
     ),
-    // At most one unfinished Session per instance (PRD §6.1).
+    // At most one unfinished Session per User (PRD §6.1).
     uniqueIndex("sessions_one_running_unique")
-      .on(sql`(true)`)
+      .on(table.userId)
       .where(sql`${table.status} in ('active', 'paused')`),
     index("sessions_goal_started_idx").on(table.goalId, table.startedAt),
     index("sessions_task_idx").on(table.taskId),
-    index("sessions_status_started_idx").on(table.status, table.startedAt),
-    index("sessions_started_id_idx").on(table.startedAt, table.id),
+    index("sessions_status_started_idx").on(
+      table.userId,
+      table.status,
+      table.startedAt,
+    ),
+    index("sessions_started_id_idx").on(
+      table.userId,
+      table.startedAt,
+      table.id,
+    ),
     index("sessions_ended_idx")
       .on(table.endedAt)
       .where(sql`${table.status} <> 'cancelled'`),
   ],
 );
 
-/** Persistent phases; due remains unfinished and holds the global slot. */
+/** Persistent phases; due remains unfinished and holds the User's slot. */
 export const sessionPhases = pgTable(
   "session_phases",
   {
@@ -200,6 +226,12 @@ export const sessionPhases = pgTable(
     nextPhaseId: uuid("next_phase_id"),
   },
   (table) => [
+    unique("session_phases_id_session_unique").on(table.id, table.sessionId),
+    foreignKey({
+      name: "session_phases_next_session_fk",
+      columns: [table.nextPhaseId, table.sessionId],
+      foreignColumns: [table.id, table.sessionId],
+    }),
     unique("session_phases_sequence_unique").on(
       table.sessionId,
       table.sequence,
@@ -225,13 +257,18 @@ export const focusIntervals = pgTable(
       .notNull()
       .references(() => sessions.id, { onDelete: "restrict" }),
     phase: focusPhase("phase").default("focus").notNull(),
-    phaseId: uuid("phase_id").references(() => sessionPhases.id),
+    phaseId: uuid("phase_id"),
     deadlineAt: timestamp("deadline_at", { withTimezone: true }),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
     endedAt: timestamp("ended_at", { withTimezone: true }),
     ...timestamps,
   },
   (table) => [
+    foreignKey({
+      name: "focus_intervals_phase_session_fk",
+      columns: [table.phaseId, table.sessionId],
+      foreignColumns: [sessionPhases.id, sessionPhases.sessionId],
+    }),
     check(
       "focus_intervals_end_after_start",
       sql`${table.endedAt} is null or ${table.endedAt} >= ${table.startedAt}`,
@@ -265,7 +302,9 @@ export const distractions = pgTable(
 export const appSettings = pgTable(
   "app_settings",
   {
-    id: varchar("id", { length: 32 }).primaryKey().default("default"),
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => user.id, { onDelete: "restrict" }),
     timezone: varchar("timezone", { length: 120 }).notNull(),
     weekStartsOn: integer("week_starts_on").notNull(),
     // Preferred timer mode for the next Session (stopwatch in T06; T08
@@ -283,7 +322,11 @@ export const appSettings = pgTable(
     ...timestamps,
   },
   (table) => [
-    check("app_settings_singleton", sql`${table.id} = 'default'`),
+    foreignKey({
+      name: "app_settings_goal_user_fk",
+      columns: [table.selectedGoalId, table.userId],
+      foreignColumns: [goals.id, goals.userId],
+    }),
     check("app_settings_week_start", sql`${table.weekStartsOn} in (0, 1)`),
     check(
       "app_settings_task_requires_goal",
@@ -300,6 +343,9 @@ export const appSettings = pgTable(
 export const idempotencyRecords = pgTable(
   "idempotency_records",
   {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
     operation: varchar("operation", { length: 80 }).notNull(),
     key: varchar("key", { length: 200 }).notNull(),
     requestHash: varchar("request_hash", { length: 64 }).notNull(),
@@ -309,7 +355,9 @@ export const idempotencyRecords = pgTable(
       .defaultNow()
       .notNull(),
   },
-  (table) => [primaryKey({ columns: [table.operation, table.key] })],
+  (table) => [
+    primaryKey({ columns: [table.userId, table.operation, table.key] }),
+  ],
 );
 
 export type AppSettings = typeof appSettings.$inferSelect;

@@ -26,6 +26,7 @@ import type { SessionView } from "@/services/session";
 const now = new Date("2026-09-30T00:00:00.000Z");
 const session: SessionView = {
   id: "00000000-0000-4000-8000-000000000001",
+  userId: "test-user-a",
   goalId: "00000000-0000-4000-8000-000000000002",
   taskId: null,
   status: "completed",
@@ -46,6 +47,7 @@ const session: SessionView = {
   createdAt: now,
   updatedAt: now,
   goal: {
+    userId: "test-user-a",
     id: "00000000-0000-4000-8000-000000000002",
     title: "改进今天页面",
     description: null,

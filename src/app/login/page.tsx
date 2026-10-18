@@ -1,20 +1,10 @@
 import type { Metadata } from "next";
 
-import { hasOwner } from "@/auth/auth";
-import { safeReturnPath } from "@/auth/secrets";
-import { LoginForm } from "@/components/login-form";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const metadata: Metadata = { title: "登录" };
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ next?: string | string[] }>;
-}) {
-  const query = await searchParams;
-  const next = Array.isArray(query.next) ? query.next[0] : query.next;
-  const ownerExists = await hasOwner();
+export default function LoginPage() {
   return (
     <main className="grid min-h-screen place-items-center bg-[#f4f1ea] px-5 py-12">
       <div className="w-full max-w-md">
@@ -29,19 +19,11 @@ export default async function LoginPage({
         </div>
         <Card className="border-stone-300 bg-white/90 shadow-sm">
           <CardHeader>
-            <CardTitle>{ownerExists ? "欢迎回来" : "设置实例密码"}</CardTitle>
-            <p className="text-sm leading-6 text-stone-500">
-              {ownerExists
-                ? "这个实例已设置密码，请输入密码继续。"
-                : "第一次使用，设置你的名称和密码。以后在其他设备上也用这个密码登录。"}
+            <CardTitle>账户登录升级中</CardTitle>
+            <p className="text-muted-foreground text-sm leading-6">
+              Google / GitHub 登录即将开放。已有登录会话可继续使用。
             </p>
           </CardHeader>
-          <CardContent>
-            <LoginForm
-              returnPath={safeReturnPath(next)}
-              ownerExists={ownerExists}
-            />
-          </CardContent>
         </Card>
       </div>
     </main>

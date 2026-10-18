@@ -35,14 +35,17 @@ it("rejects cross-origin requests before authentication or mutation", async () =
   expect(sessionService.pauseSession).not.toHaveBeenCalled();
 });
 it("rejects unauthenticated timer mutations", async () => {
-  vi.mocked(readWebSession).mockResolvedValue(false);
+  vi.mocked(readWebSession).mockResolvedValue(null);
   expect((await POST(request("pause"))).status).toBe(401);
   expect(sessionService.pauseSession).not.toHaveBeenCalled();
 });
 it.each(["pause", "resume", "cancel"] as const)(
   "dispatches an authenticated %s to the shared service",
   async (operation) => {
-    vi.mocked(readWebSession).mockResolvedValue(true);
+    vi.mocked(readWebSession).mockResolvedValue({
+      actor: "web",
+      userId: "test-user-a",
+    });
     const response = await POST(request(operation));
     expect(response.status).toBe(200);
     expect(
@@ -51,11 +54,14 @@ it.each(["pause", "resume", "cancel"] as const)(
         : operation === "resume"
           ? sessionService.resumeSession
           : sessionService.cancelSession,
-    ).toHaveBeenCalledWith({ actor: "web" }, id);
+    ).toHaveBeenCalledWith({ actor: "web", userId: "test-user-a" }, id);
   },
 );
 it("rejects unsupported operations without mutating", async () => {
-  vi.mocked(readWebSession).mockResolvedValue(true);
+  vi.mocked(readWebSession).mockResolvedValue({
+    actor: "web",
+    userId: "test-user-a",
+  });
   expect((await POST(request("finish"))).status).toBe(400);
   expect(sessionService.pauseSession).not.toHaveBeenCalled();
   expect(sessionService.resumeSession).not.toHaveBeenCalled();
@@ -64,7 +70,10 @@ it("rejects unsupported operations without mutating", async () => {
 it.each(["start_break", "start_next_focus"] as const)(
   "dispatches independent %s requests to the shared service",
   async (action) => {
-    vi.mocked(readWebSession).mockResolvedValue(true);
+    vi.mocked(readWebSession).mockResolvedValue({
+      actor: "web",
+      userId: "test-user-a",
+    });
     const input = { id, expectedPhaseId: id, action };
     const response = await advance(
       new Request("http://localhost:3000/api/session/advance", {
@@ -78,13 +87,16 @@ it.each(["start_break", "start_next_focus"] as const)(
     );
     expect(response.status).toBe(200);
     expect(sessionService.advanceSession).toHaveBeenCalledWith(
-      { actor: "web" },
+      { actor: "web", userId: "test-user-a" },
       input,
     );
   },
 );
 it("rejects phase advancement without an expected phase", async () => {
-  vi.mocked(readWebSession).mockResolvedValue(true);
+  vi.mocked(readWebSession).mockResolvedValue({
+    actor: "web",
+    userId: "test-user-a",
+  });
   expect((await advance(request("start_break"))).status).toBe(400);
   expect(sessionService.advanceSession).not.toHaveBeenCalled();
 });
@@ -92,7 +104,7 @@ it("rejects unauthenticated and cross-origin phase advancement", async () => {
   expect(
     (await advance(request("start_break", "https://other.example"))).status,
   ).toBe(403);
-  vi.mocked(readWebSession).mockResolvedValue(false);
+  vi.mocked(readWebSession).mockResolvedValue(null);
   expect((await advance(request("start_break"))).status).toBe(401);
   expect(sessionService.advanceSession).not.toHaveBeenCalled();
 });

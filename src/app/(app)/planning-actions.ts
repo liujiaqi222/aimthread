@@ -1,5 +1,7 @@
 "use server";
 
+import type { AuthenticatedContext } from "@/auth/context";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -8,15 +10,17 @@ import { readWebSession } from "@/auth/web-session";
 import { planningService } from "@/services";
 import { DomainError } from "@/shared/domain-error";
 
-const context = { actor: "web" } as const;
-
-async function authorize(): Promise<void> {
-  if (!(await readWebSession())) redirect("/login");
+async function authorize() {
+  const context = await readWebSession();
+  if (!context) redirect("/login");
+  return context;
 }
 
-async function run<T>(work: () => Promise<T>): Promise<T> {
-  await authorize();
-  const result = await planningContract(work);
+async function run<T>(
+  work: (context: AuthenticatedContext) => Promise<T>,
+): Promise<T> {
+  const context = await authorize();
+  const result = await planningContract(() => work(context));
   if (!result.ok)
     throw new Error(`${result.error.code}: ${result.error.message}`);
   revalidatePath("/goals");
@@ -44,7 +48,7 @@ export async function updatePlanningStatusAction(
   _previous_state: PlanningStatusState,
   formData: FormData,
 ): Promise<PlanningStatusState> {
-  await authorize();
+  const context = await authorize();
   const entityType = String(formData.get("entityType"));
   const id = String(formData.get("id"));
   const action = String(formData.get("action"));
@@ -76,7 +80,7 @@ export async function updatePlanningStatusAction(
 }
 
 export async function createGoalAction(formData: FormData): Promise<void> {
-  await run(() =>
+  await run((context) =>
     planningService.createGoal(context, {
       title: String(formData.get("title") ?? ""),
       description: optional(formData.get("description")),
@@ -85,7 +89,7 @@ export async function createGoalAction(formData: FormData): Promise<void> {
 }
 
 export async function updateGoalAction(formData: FormData): Promise<void> {
-  await run(() =>
+  await run((context) =>
     planningService.updateGoal(context, {
       id: String(formData.get("id")),
       ...(formData.has("title")
@@ -105,7 +109,7 @@ export async function updateGoalAction(formData: FormData): Promise<void> {
 }
 
 export async function reorderGoalsAction(ids: string[]): Promise<void> {
-  await run(() => planningService.reorderGoals(context, ids));
+  await run((context) => planningService.reorderGoals(context, ids));
 }
 
 export async function createTasksAction(formData: FormData): Promise<void> {
@@ -114,7 +118,7 @@ export async function createTasksAction(formData: FormData): Promise<void> {
     .map((line) => line.trim())
     .filter(Boolean);
   if (titles.length === 0) return;
-  await run(() =>
+  await run((context) =>
     planningService.createTasks(context, {
       goalId: String(formData.get("goalId")),
       tasks: titles.slice(0, 50).map((title) => ({ title })),
@@ -126,7 +130,7 @@ export async function updateTaskAction(
   _previousState: PlanningStatusState,
   formData: FormData,
 ): Promise<PlanningStatusState> {
-  await authorize();
+  const context = await authorize();
   const result = await planningContract(() =>
     planningService.updateTask(context, {
       id: String(formData.get("id")),
@@ -146,7 +150,7 @@ export async function reorderTasksAction(
   goalId: string,
   ids: string[],
 ): Promise<void> {
-  await run(() => planningService.reorderTasks(context, goalId, ids));
+  await run((context) => planningService.reorderTasks(context, goalId, ids));
 }
 
 const optional = (value: FormDataEntryValue | null) => {

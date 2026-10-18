@@ -149,8 +149,8 @@ export function RunPanel({
     setSoundEnabled(serverSoundEnabled);
   }
   useEffect(() => {
-    if (due && phase) remindPhaseOnce(phase.id, soundEnabled);
-  }, [due, phase, soundEnabled]);
+    if (due && phase) remindPhaseOnce(phase.id, soundEnabled, session.userId);
+  }, [due, phase, soundEnabled, session.userId]);
 
   const captureInputRef = useRef<HTMLInputElement>(null);
 

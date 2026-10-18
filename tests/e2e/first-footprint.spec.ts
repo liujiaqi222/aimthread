@@ -9,7 +9,11 @@ test("the first saved execution lights the same real calendar and keeps zero day
   await loginAndSetup(page);
   const token = await createMcpAccessToken(request);
   await page.getByRole("button", { name: "正计时", exact: true }).click();
-  await page.getByRole("button", { name: /开始第一次执行|开始专注/ }).click();
+  await page
+    .getByRole("button", {
+      name: /开始第一次执行|开始 \d+ 分钟专注|开始正计时/,
+    })
+    .click();
   let seq = 10;
   await expect
     .poll(async () => {

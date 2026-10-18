@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { AuthenticatedContext } from "@/auth/context";
+import { requireUserId, type AuthenticatedContext } from "@/auth/context";
 import type { Database } from "@/db/client";
 import {
   statsQuerySchema,
@@ -75,6 +75,7 @@ export function createStatisticsService(
 ): StatisticsService {
   return {
     async getStatistics(context, input = {}) {
+      const userId = requireUserId(context);
       const query = parsed(statsQuerySchema.safeParse(input));
       const settings = await deps.settingsService.get(context);
       const timezone = query.timezone ?? settings.timezone;
@@ -153,7 +154,7 @@ export function createStatisticsService(
       }>(sql`
         with ranges(key, start_at, end_at) as (values ${ranges}),
         candidates as materialized (
-          select * from sessions where status <> 'cancelled' and started_at < ${range.end}
+          select * from sessions where user_id = ${userId} and status <> 'cancelled' and started_at < ${range.end}
             and (ended_at > ${range.start} or status in ('active', 'paused')) ${goalFilter}
         ), contributions as materialized (
           select r.key, s.id, s.goal_id, ${contribution} as seconds
@@ -165,7 +166,7 @@ export function createStatisticsService(
         ), completed as materialized (
           select r.key, t.goal_id, count(*)::int as count from ranges r join tasks t
           on t.completed_at >= r.start_at and t.completed_at < least(r.end_at, ${now}::timestamptz)
-          and t.status = 'completed' ${query.goalId ? sql`and t.goal_id = ${query.goalId}::uuid` : sql``}
+          and exists (select 1 from goals owner_goal where owner_goal.id = t.goal_id and owner_goal.user_id = ${userId}) and t.status = 'completed' ${query.goalId ? sql`and t.goal_id = ${query.goalId}::uuid` : sql``}
           group by r.key, t.goal_id
         ), goal_focus as (
           select goal_id, sum(seconds) as seconds, count(*) filter (where seconds > 0)::int as count
@@ -175,7 +176,7 @@ export function createStatisticsService(
             coalesce(f.count, 0) as "sessionCount", coalesce(c.count, 0) as "completedTaskCount"
           from goals g left join goal_focus f on f.goal_id = g.id
           left join completed c on c.goal_id = g.id and c.key = 'total'
-          where coalesce(f.seconds, 0) > 0 or coalesce(c.count, 0) > 0
+          where g.user_id = ${userId} and (coalesce(f.seconds, 0) > 0 or coalesce(c.count, 0) > 0)
         )
         select r.key, coalesce(t.seconds, 0)::text as seconds, coalesce(t.count, 0) as count,
           coalesce((select sum(c.count) from completed c where c.key = r.key), 0)::int as completed,

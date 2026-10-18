@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { ownedBy } from "@/services/ownership";
 
-import type { AuthenticatedContext } from "@/auth/context";
+import { requireUserId, type AuthenticatedContext } from "@/auth/context";
 import type { Database } from "@/db/client";
 import { appSettings, type AppSettings } from "@/db/schema";
 import { DomainError } from "@/shared/domain-error";
@@ -8,8 +8,6 @@ import {
   updateSettingsSchema,
   type UpdateSettingsInput,
 } from "@/shared/schemas/settings";
-
-const SETTINGS_ID = "default" as const;
 
 export interface SettingsService {
   get(context: AuthenticatedContext): Promise<AppSettings>;
@@ -22,33 +20,35 @@ export interface SettingsService {
 }
 
 export function createSettingsService(database: Database): SettingsService {
-  async function ensureSettings(): Promise<void> {
+  async function ensureSettings(context: AuthenticatedContext): Promise<void> {
     await database
       .insert(appSettings)
       .values({
-        id: SETTINGS_ID,
+        userId: requireUserId(context),
         timezone: "UTC",
         weekStartsOn: 1,
         timerMode: "pomodoro",
       })
-      .onConflictDoNothing({ target: appSettings.id });
+      .onConflictDoNothing({ target: appSettings.userId });
   }
 
-  async function getSettings(): Promise<AppSettings> {
+  async function getSettings(
+    context: AuthenticatedContext,
+  ): Promise<AppSettings> {
     // Fast path: one round trip when the row already exists (the common
     // case). Only fall back to the idempotent insert when it is missing.
     const [settings] = await database
       .select()
       .from(appSettings)
-      .where(eq(appSettings.id, SETTINGS_ID))
+      .where(ownedBy(context, appSettings))
       .limit(1);
     if (settings) return settings;
 
-    await ensureSettings();
+    await ensureSettings(context);
     const [created] = await database
       .select()
       .from(appSettings)
-      .where(eq(appSettings.id, SETTINGS_ID))
+      .where(ownedBy(context, appSettings))
       .limit(1);
 
     if (!created) {
@@ -61,11 +61,11 @@ export function createSettingsService(database: Database): SettingsService {
   }
 
   return {
-    async get(_context) {
-      void _context;
-      return getSettings();
+    async get(context) {
+      requireUserId(context);
+      return getSettings(context);
     },
-    async update(_context, input, options) {
+    async update(context, input, options) {
       const validated = updateSettingsSchema.safeParse(input);
       if (!validated.success) {
         throw new DomainError("INVALID_SETTINGS", "Settings are invalid.", {
@@ -73,7 +73,7 @@ export function createSettingsService(database: Database): SettingsService {
         });
       }
 
-      const current = await getSettings();
+      const current = await getSettings(context);
       const [settings] = await database
         .update(appSettings)
         .set({
@@ -83,7 +83,7 @@ export function createSettingsService(database: Database): SettingsService {
           }),
           updatedAt: new Date(),
         })
-        .where(eq(appSettings.id, SETTINGS_ID))
+        .where(ownedBy(context, appSettings))
         .returning();
 
       if (!settings) {
@@ -94,10 +94,10 @@ export function createSettingsService(database: Database): SettingsService {
       }
       return settings;
     },
-    async checkSchema(_context) {
-      void _context;
+    async checkSchema(context) {
+      requireUserId(context);
       try {
-        await getSettings();
+        await getSettings(context);
       } catch (error) {
         if (error instanceof DomainError) throw error;
         throw new DomainError(

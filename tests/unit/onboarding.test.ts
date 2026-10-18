@@ -21,8 +21,8 @@ describe("onboarding state", () => {
     expect(
       parseOnboardingDraft(JSON.stringify({ ...draft, version: 2 })),
     ).toBeNull();
-    expect(onboardingDraftStorageKey("https://one.example/path")).not.toBe(
-      onboardingDraftStorageKey("https://two.example/path"),
+    expect(onboardingDraftStorageKey("https://one.example/path", "a")).not.toBe(
+      onboardingDraftStorageKey("https://two.example/path", "a"),
     );
   });
 

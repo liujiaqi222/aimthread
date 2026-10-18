@@ -1,3 +1,4 @@
+import { requireWebSession } from "@/auth/web-session";
 import { headers } from "next/headers";
 import { SettingsForm } from "@/components/settings-form";
 import { ProfileForm } from "@/components/profile-form";
@@ -11,9 +12,10 @@ import { timerModeLabel } from "@/shared/labels";
 import Link from "next/link";
 
 export default async function SettingsPage() {
+  const context = await requireWebSession();
   const requestHeaders = await headers();
   const [settings, consents, session] = await Promise.all([
-    settingsService.get({ actor: "web" }),
+    settingsService.get(context),
     auth.api.getOAuthConsents({ headers: requestHeaders }),
     auth.api.getSession({ headers: requestHeaders }),
   ]);

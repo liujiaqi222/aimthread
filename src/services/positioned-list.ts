@@ -62,13 +62,13 @@ export async function renumberPositions(
     await tx
       .update(table)
       .set({ position: offset + index + 1, updatedAt: new Date() })
-      .where(eq(table.id, id));
+      .where(and(scope, eq(table.id, id)));
   }
   for (const [index, id] of ids.entries()) {
     await tx
       .update(table)
       .set({ position: index + 1, updatedAt: new Date() })
-      .where(eq(table.id, id));
+      .where(and(scope, eq(table.id, id)));
   }
 }
 

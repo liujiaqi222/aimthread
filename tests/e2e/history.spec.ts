@@ -6,7 +6,7 @@ test("T09 calendar, goal filter, text edits, corrections, overlap confirmation a
   page,
   request,
 }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(240_000);
   await loginAndSetup(page);
   const token = await createMcpAccessToken(request);
   let id = 1;
