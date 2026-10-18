@@ -8,11 +8,11 @@ export function unlockTimerSound() {
     /* Audio is auxiliary; timer state never depends on permission. */
   }
 }
-export function remindPhaseOnce(id: string, enabled: boolean) {
-  if (reminded.has(id)) return;
-  reminded.add(id);
+export function remindPhaseOnce(id: string, enabled: boolean, userId: string) {
+  const key = `aimthread:phase-reminded:${window.location.origin}:${encodeURIComponent(userId)}:${id}`;
+  if (reminded.has(key)) return;
+  reminded.add(key);
   try {
-    const key = `aimthread:phase-reminded:${id}`;
     if (sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, "1");
   } catch {

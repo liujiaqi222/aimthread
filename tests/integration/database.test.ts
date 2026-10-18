@@ -105,10 +105,13 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await pool.query(
+    `insert into "user" (id,name,email,email_verified) values ('test-user-a','User A','a@example.test',true), ('test-user-b','User B','b@example.test',true) on conflict do nothing`,
+  );
+  await pool.query(
     "truncate distractions, focus_intervals, sessions, tasks, goals, idempotency_records restart identity cascade",
   );
   await pool.query(
-    "update app_settings set selected_goal_id = null, selected_task_id = null where id = 'default'",
+    "update app_settings set selected_goal_id = null, selected_task_id = null where user_id = 'test-user-a'",
   );
 });
 
@@ -151,7 +154,7 @@ describe("committed migrations (empty-database initialization)", () => {
     const otherGoalId = randomUUID();
     const taskId = randomUUID();
     await pool.query(
-      `insert into goals (id, title, position) values ($1, 'Goal', 1), ($2, 'Other', 2)`,
+      `insert into goals (user_id, id, title, position) values ('test-user-a', $1, 'Goal', 1), ('test-user-a', $2, 'Other', 2)`,
       [goalId, otherGoalId],
     );
     await pool.query(
@@ -162,8 +165,7 @@ describe("committed migrations (empty-database initialization)", () => {
     // A Session claiming the Task under another Goal is impossible.
     await expect(
       pool.query(
-        `insert into sessions (goal_id, task_id, status, entry_mode, created_via, timer_mode, time_basis, started_at)
-         values ($1, $2, 'active', 'timer', 'web', 'stopwatch', 'observed', now())`,
+        `insert into sessions (user_id, goal_id, task_id, status, entry_mode, created_via, timer_mode, time_basis, started_at) values ('test-user-a', $1, $2, 'active', 'timer', 'web', 'stopwatch', 'observed', now())`,
         [otherGoalId, taskId],
       ),
     ).rejects.toThrow(/sessions_task_goal_fk|foreign key/i);
@@ -177,24 +179,20 @@ describe("committed migrations (empty-database initialization)", () => {
     ).rejects.toThrow(/tasks_goal_position_unique|duplicate key/i);
   });
 
-  it("allows only one unfinished session per instance under concurrency", async () => {
+  it("allows only one unfinished Session per User under concurrency", async () => {
     const goalId = randomUUID();
     await pool.query(
-      `insert into goals (id, title, position) values ($1, 'Goal', 1)`,
+      `insert into goals (user_id, id, title, position) values ('test-user-a', $1, 'Goal', 1)`,
       [goalId],
     );
 
     const results = await Promise.allSettled([
       pool.query(
-        `insert into sessions
-          (goal_id, status, entry_mode, created_via, timer_mode, time_basis, started_at)
-         values ($1, 'active', 'timer', 'web', 'stopwatch', 'observed', now())`,
+        `insert into sessions (user_id, goal_id, status, entry_mode, created_via, timer_mode, time_basis, started_at) values ('test-user-a', $1, 'active', 'timer', 'web', 'stopwatch', 'observed', now())`,
         [goalId],
       ),
       pool.query(
-        `insert into sessions
-          (goal_id, status, entry_mode, created_via, timer_mode, time_basis, started_at)
-         values ($1, 'paused', 'timer', 'mcp', 'stopwatch', 'observed', now())`,
+        `insert into sessions (user_id, goal_id, status, entry_mode, created_via, timer_mode, time_basis, started_at) values ('test-user-a', $1, 'paused', 'timer', 'mcp', 'stopwatch', 'observed', now())`,
         [goalId],
       ),
     ]);
@@ -209,8 +207,8 @@ describe("committed migrations (empty-database initialization)", () => {
 });
 
 describe("planning service and selection", () => {
-  const web = { actor: "web" } as const;
-  const mcp = { actor: "mcp" } as const;
+  const web = { actor: "web", userId: "test-user-a" } as const;
+  const mcp = { actor: "mcp", userId: "test-user-a" } as const;
 
   async function createGoalWithTasks(label: string, titles: string[]) {
     const goal = await planningService.createGoal(web, {
@@ -341,8 +339,8 @@ describe("planning service and selection", () => {
 });
 
 describe("session service: stopwatch loop, exclusivity, idempotency", () => {
-  const web = { actor: "web" } as const;
-  const mcp = { actor: "mcp" } as const;
+  const web = { actor: "web", userId: "test-user-a" } as const;
+  const mcp = { actor: "mcp", userId: "test-user-a" } as const;
 
   async function createGoalWithTasks(label: string, titles: string[]) {
     const goal = await planningService.createGoal(web, {
@@ -812,8 +810,7 @@ describe("session service: stopwatch loop, exclusivity, idempotency", () => {
     const sessionId = randomUUID();
     const now = new Date();
     await pool.query(
-      `insert into sessions (id, goal_id, status, entry_mode, created_via, timer_mode, time_basis, started_at, ended_at, duration_seconds)
-       values ($1, $2, 'completed', 'timer', 'web', 'stopwatch', 'observed', $3, $3, 0)`,
+      `insert into sessions (user_id, id, goal_id, status, entry_mode, created_via, timer_mode, time_basis, started_at, ended_at, duration_seconds) values ('test-user-a', $1, $2, 'completed', 'timer', 'web', 'stopwatch', 'observed', $3, $3, 0)`,
       [sessionId, goal.id, now],
     );
 
@@ -829,7 +826,7 @@ describe("session service: stopwatch loop, exclusivity, idempotency", () => {
 });
 
 describe("dashboard resolution and resume hints", () => {
-  const web = { actor: "web" } as const;
+  const web = { actor: "web", userId: "test-user-a" } as const;
 
   async function createGoalWithTasks(label: string, titles: string[]) {
     const goal = await planningService.createGoal(web, {
@@ -858,8 +855,7 @@ describe("dashboard resolution and resume hints", () => {
       : new Date();
     const sessionId = randomUUID();
     await pool.query(
-      `insert into sessions (id, goal_id, task_id, status, entry_mode, created_via, timer_mode, time_basis, started_at, ended_at, duration_seconds, resume_hint)
-       values ($1, $2, $3, 'completed', 'timer', 'web', 'stopwatch', 'observed', $4, $5, $6, $7)`,
+      `insert into sessions (user_id, id, goal_id, task_id, status, entry_mode, created_via, timer_mode, time_basis, started_at, ended_at, duration_seconds, resume_hint) values ('test-user-a', $1, $2, $3, 'completed', 'timer', 'web', 'stopwatch', 'observed', $4, $5, $6, $7)`,
       [
         sessionId,
         input.goalId,
@@ -967,8 +963,8 @@ describe("dashboard resolution and resume hints", () => {
 });
 
 describe("history service and statistics", () => {
-  const web = { actor: "web" } as const;
-  const mcp = { actor: "mcp" } as const;
+  const web = { actor: "web", userId: "test-user-a" } as const;
+  const mcp = { actor: "mcp", userId: "test-user-a" } as const;
 
   async function createGoalWithTasks(label: string, titles: string[]) {
     const goal = await planningService.createGoal(web, {
@@ -1078,8 +1074,7 @@ describe("history service and statistics", () => {
     // Observed: 09:00–10:00 with a 10-minute pause in the middle.
     const observedId = randomUUID();
     await pool.query(
-      `insert into sessions (id, goal_id, status, entry_mode, created_via, timer_mode, time_basis, started_at, ended_at, duration_seconds)
-       values ($1, $2, 'completed', 'timer', 'web', 'stopwatch', 'observed', $3, $4, $5)`,
+      `insert into sessions (user_id, id, goal_id, status, entry_mode, created_via, timer_mode, time_basis, started_at, ended_at, duration_seconds) values ('test-user-a', $1, $2, 'completed', 'timer', 'web', 'stopwatch', 'observed', $3, $4, $5)`,
       [
         observedId,
         goal.id,
@@ -1103,16 +1098,14 @@ describe("history service and statistics", () => {
     // Manual: 10:00–11:00 declared 45 effective minutes.
     const manualId = randomUUID();
     await pool.query(
-      `insert into sessions (id, goal_id, status, entry_mode, created_via, timer_mode, time_basis, started_at, ended_at, duration_seconds)
-       values ($1, $2, 'completed', 'manual', 'web', 'stopwatch', 'manual', $3, $4, $5)`,
+      `insert into sessions (user_id, id, goal_id, status, entry_mode, created_via, timer_mode, time_basis, started_at, ended_at, duration_seconds) values ('test-user-a', $1, $2, 'completed', 'manual', 'web', 'stopwatch', 'manual', $3, $4, $5)`,
       [manualId, goal.id, "2026-06-01T10:00:00Z", "2026-06-01T11:00:00Z", 2700],
     );
 
     // Cancelled intervals never count.
     const cancelledId = randomUUID();
     await pool.query(
-      `insert into sessions (id, goal_id, status, entry_mode, created_via, timer_mode, time_basis, started_at, ended_at, duration_seconds)
-       values ($1, $2, 'cancelled', 'timer', 'web', 'stopwatch', 'observed', $3, $4, $5)`,
+      `insert into sessions (user_id, id, goal_id, status, entry_mode, created_via, timer_mode, time_basis, started_at, ended_at, duration_seconds) values ('test-user-a', $1, $2, 'cancelled', 'timer', 'web', 'stopwatch', 'observed', $3, $4, $5)`,
       [
         cancelledId,
         goal.id,
@@ -1154,8 +1147,8 @@ describe("history service and statistics", () => {
 });
 
 describe("execution context and task estimate baseline", () => {
-  const web = { actor: "web" } as const;
-  const mcp = { actor: "mcp" } as const;
+  const web = { actor: "web", userId: "test-user-a" } as const;
+  const mcp = { actor: "mcp", userId: "test-user-a" } as const;
 
   it("captures the first nonempty estimate and preserves it through edits, clears and reopen", async () => {
     const goal = await planningService.createGoal(web, {
@@ -1213,7 +1206,7 @@ describe("execution context and task estimate baseline", () => {
     });
     const observedId = randomUUID();
     await pool.query(
-      `insert into sessions(id,goal_id,task_id,status,entry_mode,created_via,timer_mode,time_basis,started_at,ended_at,duration_seconds) values($1,$2,$3,'completed','timer','web','pomodoro','observed','2026-06-01T08:00Z','2026-06-01T09:00Z',900)`,
+      `insert into sessions (user_id, id,goal_id,task_id,status,entry_mode,created_via,timer_mode,time_basis,started_at,ended_at,duration_seconds) values ('test-user-a', $1,$2,$3,'completed','timer','web','pomodoro','observed','2026-06-01T08:00Z','2026-06-01T09:00Z',900)`,
       [observedId, goal.id, task!.id],
     );
     await pool.query(
@@ -1252,7 +1245,7 @@ describe("execution context and task estimate baseline", () => {
     });
     await sessionService.cancelSession(web, cancelled.id);
     await pool.query(
-      `insert into sessions(goal_id,task_id,status,entry_mode,created_via,timer_mode,time_basis,started_at,ended_at,duration_seconds,resume_hint) values($1,$2,'completed','timer','web','stopwatch','observed','2026-06-01T14:00Z','2026-06-01T14:00Z',0,'ZERO_HINT')`,
+      `insert into sessions (user_id, goal_id,task_id,status,entry_mode,created_via,timer_mode,time_basis,started_at,ended_at,duration_seconds,resume_hint) values ('test-user-a', $1,$2,'completed','timer','web','stopwatch','observed','2026-06-01T14:00Z','2026-06-01T14:00Z',0,'ZERO_HINT')`,
       [goal.id, task!.id],
     );
     const { report, markdown } = await executionReportService.getGoalContext(
@@ -1284,20 +1277,23 @@ describe("execution context and task estimate baseline", () => {
 });
 
 describe("MCP server over the real protocol", () => {
-  const web = { actor: "web" } as const;
+  const web = { actor: "web", userId: "test-user-a" } as const;
 
   const handler = createMcpHandler(() =>
-    createAimThreadMcpServer({
-      settingsService,
-      planningService,
-      selectionService,
-      sessionService,
-      distractionService,
-      dashboardService,
-      historyService,
-      statisticsService,
-      executionReportService,
-    }),
+    createAimThreadMcpServer(
+      {
+        settingsService,
+        planningService,
+        selectionService,
+        sessionService,
+        distractionService,
+        dashboardService,
+        historyService,
+        statisticsService,
+        executionReportService,
+      },
+      { actor: "mcp", userId: "test-user-a" },
+    ),
   );
 
   let nextId = 1;
@@ -1475,8 +1471,8 @@ describe("MCP server over the real protocol", () => {
 });
 
 describe("T08 pomodoro deadlines, concurrency and shared contracts", () => {
-  const web = { actor: "web" } as const;
-  const mcp = { actor: "mcp" } as const;
+  const web = { actor: "web", userId: "test-user-a" } as const;
+  const mcp = { actor: "mcp", userId: "test-user-a" } as const;
   let now = new Date("2026-10-01T00:00:00Z");
   const timer = createSessionService(database, {
     distractionService,
@@ -1935,8 +1931,8 @@ describe("T08 pomodoro deadlines, concurrency and shared contracts", () => {
 });
 
 describe("T09 footprints", () => {
-  const web = { actor: "web" } as const;
-  const mcp = { actor: "mcp" } as const;
+  const web = { actor: "web", userId: "test-user-a" } as const;
+  const mcp = { actor: "mcp", userId: "test-user-a" } as const;
   const now = "2026-06-03T12:00:00.000Z";
   async function goal(title = "T09") {
     return planningService.createGoal(web, { title });
@@ -1955,7 +1951,7 @@ describe("T09 footprints", () => {
   ) {
     const id = randomUUID();
     await pool.query(
-      `insert into sessions(id,goal_id,status,entry_mode,created_via,timer_mode,time_basis,started_at,ended_at,duration_seconds) values($1,$2,$3,'timer','web','pomodoro','observed',$4,$5,0)`,
+      `insert into sessions (user_id, id,goal_id,status,entry_mode,created_via,timer_mode,time_basis,started_at,ended_at,duration_seconds) values ('test-user-a', $1,$2,$3,'timer','web','pomodoro','observed',$4,$5,0)`,
       [id, goalId, status, start, end],
     );
     for (const i of intervals)
@@ -2406,16 +2402,16 @@ describe("T09 footprints", () => {
     await settingsService.update(web, { timezone: "UTC" });
     const g = await goal();
     await pool.query(
-      `insert into sessions(goal_id,status,entry_mode,created_via,timer_mode,time_basis,started_at,ended_at,duration_seconds)
-      select $1,'completed','manual','web','stopwatch','manual',d,d+interval '25 minutes',1500 from generate_series('2025-06-01'::timestamptz,'2026-05-31'::timestamptz,interval '1 day') d`,
+      `insert into sessions(user_id,goal_id,status,entry_mode,created_via,timer_mode,time_basis,started_at,ended_at,duration_seconds)
+      select 'test-user-a',$1,'completed','manual','web','stopwatch','manual',d,d+interval '25 minutes',1500 from generate_series('2025-06-01'::timestamptz,'2026-05-31'::timestamptz,interval '1 day') d`,
       [g.id],
     );
     // Mixed source data: every day also has cross-midnight focus,
     // a rest interval and another focus interval in the same Session.
     await pool.query(
       `with inserted as (
-      insert into sessions(goal_id,status,entry_mode,created_via,timer_mode,time_basis,started_at,ended_at,duration_seconds)
-      select $1,'completed','timer','mcp','pomodoro','observed',d+interval '23 hours 50 minutes',d+interval '24 hours 10 minutes',600
+      insert into sessions(user_id,goal_id,status,entry_mode,created_via,timer_mode,time_basis,started_at,ended_at,duration_seconds)
+      select 'test-user-a',$1,'completed','timer','mcp','pomodoro','observed',d+interval '23 hours 50 minutes',d+interval '24 hours 10 minutes',600
       from generate_series('2025-06-01'::timestamptz,'2026-05-31'::timestamptz,interval '1 day') d returning id,started_at
     ) insert into focus_intervals(session_id,phase,started_at,ended_at)
       select id,'focus'::focus_phase,started_at,started_at+interval '5 minutes' from inserted
@@ -2475,5 +2471,99 @@ describe("T09 footprints", () => {
     });
     expect(all.totalFocusSeconds).toBe(stats.totalFocusSeconds + 300);
     expect(all.daily).toEqual([]);
+  });
+});
+
+describe("User ownership database constraints", () => {
+  const userA = { actor: "web", userId: "test-user-a" } as const;
+  const userB = { actor: "web", userId: "test-user-b" } as const;
+
+  it("rejects cross-User Session/Goal and selection pairs at the database boundary", async () => {
+    const a = await planningService.createGoal(userA, { title: "A" });
+    const b = await planningService.createGoal(userB, { title: "B" });
+    const [taskB] = await planningService.createTasks(userB, {
+      goalId: b.id,
+      tasks: [{ title: "B task" }],
+    });
+    await expect(
+      pool.query(
+        `insert into sessions (user_id,goal_id,status,entry_mode,created_via,timer_mode,time_basis,started_at) values ($1,$2,'active','timer','web','stopwatch','observed',now())`,
+        [userA.userId, b.id],
+      ),
+    ).rejects.toThrow(/sessions_goal_user_fk/);
+    await settingsService.get(userA);
+    await expect(
+      pool.query(
+        `update app_settings set selected_goal_id=$1, selected_task_id=null where user_id=$2`,
+        [b.id, userA.userId],
+      ),
+    ).rejects.toThrow(/app_settings_goal_user_fk/);
+    await expect(
+      pool.query(
+        `update app_settings set selected_goal_id=$1, selected_task_id=$2 where user_id=$3`,
+        [a.id, taskB!.id, userA.userId],
+      ),
+    ).rejects.toThrow(/app_settings_selection_task_fk/);
+    expect(
+      (await planningService.listGoals(userB)).items.map((g) => g.id),
+    ).toEqual([b.id]);
+  });
+
+  it("allows simultaneous Users and arbitrates same-User concurrent starts", async () => {
+    const a = await planningService.createGoal(userA, { title: "A" });
+    const b = await planningService.createGoal(userB, { title: "B" });
+    const [sa, sb] = await Promise.all([
+      sessionService.startSession(userA, {
+        goalId: a.id,
+        timerMode: "stopwatch",
+        idempotencyKey: "same-key",
+      }),
+      sessionService.startSession(userB, {
+        goalId: b.id,
+        timerMode: "stopwatch",
+        idempotencyKey: "same-key",
+      }),
+    ]);
+    expect(sa.id).not.toBe(sb.id);
+    await sessionService.finishSession(userA, sa.id);
+    const results = await Promise.allSettled([
+      sessionService.startSession(userA, {
+        goalId: a.id,
+        timerMode: "stopwatch",
+      }),
+      sessionService.startSession(userA, {
+        goalId: a.id,
+        timerMode: "stopwatch",
+      }),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect((await sessionService.getActiveSession(userB))!.id).toBe(sb.id);
+  });
+
+  it("prevents phase and interval references from splicing different Users' Sessions", async () => {
+    const a = await planningService.createGoal(userA, { title: "A" });
+    const b = await planningService.createGoal(userB, { title: "B" });
+    const [sa, sb] = await Promise.all([
+      sessionService.startSession(userA, {
+        goalId: a.id,
+        timerMode: "pomodoro",
+      }),
+      sessionService.startSession(userB, {
+        goalId: b.id,
+        timerMode: "pomodoro",
+      }),
+    ]);
+    await expect(
+      pool.query(
+        `insert into focus_intervals (session_id,phase_id,started_at) values ($1,$2,now())`,
+        [sa.id, sb.phase!.id],
+      ),
+    ).rejects.toThrow(/focus_intervals_phase_session_fk/);
+    await expect(
+      pool.query(`update session_phases set next_phase_id=$1 where id=$2`, [
+        sb.phase!.id,
+        sa.phase!.id,
+      ]),
+    ).rejects.toThrow(/session_phases_next_session_fk/);
   });
 });

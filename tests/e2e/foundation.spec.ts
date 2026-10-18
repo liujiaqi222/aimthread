@@ -227,7 +227,7 @@ test("setup shows an actionable error when the schema is incomplete", async ({
     await recoveryPool.end();
   }
 
-  // The next serial test recreates its owner and baseline through
+  // The next serial test recreates its test User and baseline through
   // loginAndSetup. Avoid navigating while the dev server is still releasing
   // connections to the schema that was just replaced.
 });

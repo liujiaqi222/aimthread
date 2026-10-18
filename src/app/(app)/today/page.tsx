@@ -1,3 +1,4 @@
+import { requireWebSession } from "@/auth/web-session";
 import { redirect } from "next/navigation";
 
 import { dashboardService } from "@/services";
@@ -8,7 +9,7 @@ export default async function TodayPage({
 }: {
   searchParams: Promise<{ first?: string | string[] }>;
 }) {
-  const context = { actor: "web" } as const;
+  const context = await requireWebSession();
   const dashboard = await dashboardService.getDashboard(context);
   if (dashboard.goals.length === 0) redirect("/onboarding");
   const query = await searchParams;

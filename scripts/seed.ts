@@ -28,11 +28,16 @@ async function main() {
   const pool = new Pool({ connectionString: databaseUrl, max: 1 });
   const database = drizzle({ client: pool, schema });
   const planningService = createPlanningService(database);
-  const context = { actor: "web" } as const;
+  const userId = process.argv
+    .find((arg) => arg.startsWith("--user-id="))
+    ?.slice(10);
+  if (!userId) throw new Error("Seed requires --user-id=<existing User ID>.");
+  const context = { actor: "web", userId } as const;
 
   try {
     const existing = await pool.query<{ count: string }>(
-      "select count(*) from goals",
+      "select count(*) from goals where user_id = $1",
+      [userId],
     );
     const count = Number(existing.rows[0]?.count ?? 0);
     if (count > 0 && !force) {

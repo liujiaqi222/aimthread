@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { loginAndSetup, webPassword } from "./helpers";
-import { OWNER_EMAIL } from "@/auth/constants";
+import { loginAndSetup, loginAs, testUserId } from "./helpers";
 import { mkdir, writeFile } from "node:fs/promises";
 import { createLocalJWKSet, jwtVerify } from "jose";
 
@@ -133,13 +132,12 @@ test("measure Neon timer click-to-render latency", async ({
     return response.status;
   });
   expect(signedOutStatus).toBe(401);
-  const signIn = await page.request.post("/api/auth/sign-in/email", {
-    data: { email: OWNER_EMAIL, password: webPassword },
-  });
-  expect(signIn.ok()).toBe(true);
+  await loginAs(page);
   const freshSession = await page.request.get(
     "/api/auth/get-session?disableCookieCache=true",
   );
   expect(freshSession.ok()).toBe(true);
-  expect((await freshSession.json()).user.email).toBe(OWNER_EMAIL);
+  expect((await freshSession.json()).user.email).toBe(
+    `${testUserId()}@example.test`,
+  );
 });

@@ -10,11 +10,10 @@ const inputSchema = z.object({ soundEnabled: z.boolean() }).strict();
 export async function PATCH(request: Request) {
   if (!isSameOriginRequest(request))
     return Response.json({ ok: false }, { status: 403 });
-  if (!(await readWebSession()))
-    return Response.json({ ok: false }, { status: 401 });
+  const context = await readWebSession();
+  if (!context) return Response.json({ ok: false }, { status: 401 });
   const input = inputSchema.safeParse(await request.json().catch(() => null));
   if (!input.success) return Response.json({ ok: false }, { status: 400 });
-  const context = { actor: "web" } as const;
   const settings = await settingsService.get(context);
   const result = await settingsUpdateContract(settingsService, context, {
     timerPreferences: {

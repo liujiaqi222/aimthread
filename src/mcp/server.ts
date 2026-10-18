@@ -47,7 +47,7 @@ import {
 } from "@/shared/schemas/session";
 import { updateSettingsSchema } from "@/shared/schemas/settings";
 
-const context = { actor: "mcp" } as const;
+import { requireUserId, type AuthenticatedContext } from "@/auth/context";
 const oauthSecuritySchemes = [
   { type: "oauth2", scopes: [MCP_READ_SCOPE, MCP_WRITE_SCOPE] },
 ];
@@ -89,17 +89,21 @@ function toolResult(result: object, error?: string) {
  * Track / Current-Next registrations are gone — Goal, Task and Session
  * hang off each other directly.
  */
-export function createAimThreadMcpServer(deps: {
-  settingsService: SettingsService;
-  planningService: PlanningService;
-  selectionService: SelectionService;
-  sessionService: SessionService;
-  distractionService: DistractionService;
-  dashboardService: DashboardService;
-  historyService: HistoryService;
-  statisticsService: StatisticsService;
-  executionReportService: ExecutionReportService;
-}) {
+export function createAimThreadMcpServer(
+  deps: {
+    settingsService: SettingsService;
+    planningService: PlanningService;
+    selectionService: SelectionService;
+    sessionService: SessionService;
+    distractionService: DistractionService;
+    dashboardService: DashboardService;
+    historyService: HistoryService;
+    statisticsService: StatisticsService;
+    executionReportService: ExecutionReportService;
+  },
+  context: AuthenticatedContext,
+) {
+  requireUserId(context);
   const {
     settingsService,
     planningService,

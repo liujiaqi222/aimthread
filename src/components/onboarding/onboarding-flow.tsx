@@ -42,7 +42,13 @@ function emptyDraft(): OnboardingDraft {
   };
 }
 
-export function OnboardingFlow({ endpoint }: { endpoint: string }) {
+export function OnboardingFlow({
+  endpoint,
+  userId,
+}: {
+  endpoint: string;
+  userId: string;
+}) {
   const hydrated = useSyncExternalStore(
     subscribeToHydration,
     () => true,
@@ -60,12 +66,20 @@ export function OnboardingFlow({ endpoint }: { endpoint: string }) {
     );
   }
 
-  return <HydratedOnboardingFlow endpoint={endpoint} />;
+  return (
+    <HydratedOnboardingFlow key={userId} endpoint={endpoint} userId={userId} />
+  );
 }
 
-function HydratedOnboardingFlow({ endpoint }: { endpoint: string }) {
+function HydratedOnboardingFlow({
+  endpoint,
+  userId,
+}: {
+  endpoint: string;
+  userId: string;
+}) {
   const router = useRouter();
-  const storageKey = onboardingDraftStorageKey(window.location.origin);
+  const storageKey = onboardingDraftStorageKey(window.location.origin, userId);
   const [draft, setDraft] = useState<OnboardingDraft>(() => {
     return (
       parseOnboardingDraft(localStorage.getItem(storageKey)) ?? emptyDraft()

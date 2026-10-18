@@ -27,6 +27,7 @@ import type { HistorySessionDetail } from "@/services/history";
 const now = new Date("2026-06-02T12:00:00Z");
 const detail: HistorySessionDetail = {
   id: "00000000-0000-4000-8000-000000000001",
+  userId: "test-user-a",
   goalId: "00000000-0000-4000-8000-000000000002",
   taskId: null,
   status: "completed",
@@ -47,6 +48,7 @@ const detail: HistorySessionDetail = {
   createdAt: now,
   updatedAt: now,
   goal: {
+    userId: "test-user-a",
     id: "00000000-0000-4000-8000-000000000002",
     title: "目标",
     description: null,

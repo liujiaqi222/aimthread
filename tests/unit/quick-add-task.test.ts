@@ -34,6 +34,7 @@ const mockDashboard: DashboardData = {
   activeSession: null,
   selection: {
     goal: {
+      userId: "test-user-a",
       id: "00000000-0000-4000-8000-000000000001",
       title: "产品首页重构",
       description: null,
@@ -51,6 +52,7 @@ const mockDashboard: DashboardData = {
   goals: [
     {
       goal: {
+        userId: "test-user-a",
         id: "00000000-0000-4000-8000-000000000001",
         title: "产品首页重构",
         description: null,

@@ -26,7 +26,13 @@ function isFocusScene() {
   return Boolean(document.querySelector(".focus-scene"));
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  userId,
+}: {
+  children: React.ReactNode;
+  userId: string;
+}) {
   const [menu, setMenu] = useState(false);
   const focusScene = useSyncExternalStore(
     subscribeToScene,
@@ -90,7 +96,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <PrimaryNav collapsed={collapsed} />
           </div>
           <div className="border-border mt-auto border-t pt-4">
-            <LogoutButton collapsed={collapsed} />
+            <LogoutButton userId={userId} collapsed={collapsed} />
           </div>
         </aside>
         <header className="border-border bg-card flex h-16 items-center justify-between border-b px-5 md:hidden">
@@ -132,7 +138,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
             <PrimaryNav onNavigate={() => setMenu(false)} />
             <div className="mt-auto">
-              <LogoutButton />
+              <LogoutButton userId={userId} />
             </div>
           </Modal>
         )}

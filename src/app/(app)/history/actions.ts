@@ -1,5 +1,7 @@
 "use server";
 
+import type { AuthenticatedContext } from "@/auth/context";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -25,10 +27,10 @@ import {
   parseLocalDateTime,
 } from "@/shared/timezone";
 
-const context = { actor: "web" } as const;
-
 async function authorize() {
-  if (!(await readWebSession())) redirect("/login");
+  const context = await readWebSession();
+  if (!context) redirect("/login");
+  return context;
 }
 
 function refreshHistory() {
@@ -49,9 +51,11 @@ function parseHistoryTime(value: string, timezone: string): string {
   }
 }
 
-async function run<T>(work: () => Promise<T>): Promise<Result<T>> {
-  await authorize();
-  const result = await sessionContract(work);
+async function run<T>(
+  work: (context: AuthenticatedContext) => Promise<T>,
+): Promise<Result<T>> {
+  const context = await authorize();
+  const result = await sessionContract(() => work(context));
   if (result.ok) refreshHistory();
   return result;
 }
@@ -59,7 +63,7 @@ async function run<T>(work: () => Promise<T>): Promise<Result<T>> {
 export async function getHistorySessionAction(
   id: string,
 ): Promise<Result<HistorySessionDetail>> {
-  await authorize();
+  const context = await authorize();
   return sessionContract(() => historyService.getSession(context, id));
 }
 
@@ -76,7 +80,7 @@ export async function logSessionAction(input: {
   allowOverlap?: boolean;
   idempotencyKey?: string;
 }): Promise<Result<Session>> {
-  return run(async () => {
+  return run(async (context) => {
     const timezone = input.timezone
       ? parsed(timezoneSchema.safeParse(input.timezone))
       : (await settingsService.get(context)).timezone;
@@ -115,7 +119,7 @@ export async function updateHistorySessionAction(input: {
   note?: string | null;
   allowOverlap?: boolean;
 }): Promise<Result<Session>> {
-  return run(async () => {
+  return run(async (context) => {
     const timezone = input.timezone
       ? parsed(timezoneSchema.safeParse(input.timezone))
       : (await settingsService.get(context)).timezone;
@@ -144,20 +148,22 @@ export async function updateHistorySessionAction(input: {
 export async function cancelHistorySessionAction(
   id: string,
 ): Promise<Result<Session>> {
-  return run(() => sessionService.cancelSession(context, id));
+  return run((context) => sessionService.cancelSession(context, id));
 }
 
 export async function updateHistoryDistractionAction(
   id: string,
   text: string | null,
 ): Promise<Result<Distraction>> {
-  return run(() => distractionService.updateDistraction(context, id, { text }));
+  return run((context) =>
+    distractionService.updateDistraction(context, id, { text }),
+  );
 }
 
 export async function archiveHistoryDistractionAction(
   id: string,
 ): Promise<Result<Distraction>> {
-  return run(() => distractionService.archiveDistraction(context, id));
+  return run((context) => distractionService.archiveDistraction(context, id));
 }
 
 export async function getHistoryDayAction(input: {
@@ -169,7 +175,7 @@ export async function getHistoryDayAction(input: {
   taskCursor?: string;
   now: string;
 }) {
-  await authorize();
+  const context = await authorize();
   return sessionContract(async () => {
     const timezone = parsed(timezoneSchema.safeParse(input.timezone));
     let from: string;
@@ -211,7 +217,7 @@ export async function getHistoryDayAction(input: {
 }
 
 export async function getFirstExecutionFeedbackAction(id: string) {
-  await authorize();
+  const context = await authorize();
   return sessionContract(async () => {
     const session = await historyService.getSession(context, id);
     if (session.status !== "completed" || (session.durationSeconds ?? 0) <= 0)
@@ -237,7 +243,7 @@ export async function getFirstExecutionFeedbackAction(id: string) {
 }
 
 export async function getTodayTimelineAction() {
-  await authorize();
+  const context = await authorize();
   const settings = await settingsService.get(context);
   const now = new Date();
   const date = localDateKey(now, settings.timezone);

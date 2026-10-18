@@ -6,11 +6,20 @@ import { useSessionNavigation } from "@/components/session-navigation";
 import { Button } from "@/components/ui/button";
 import { onboardingDraftStorageKey } from "@/shared/onboarding";
 
-export function LogoutButton({ collapsed = false }: { collapsed?: boolean }) {
+export function LogoutButton({
+  collapsed = false,
+  userId,
+}: {
+  collapsed?: boolean;
+  userId: string;
+}) {
   const { request } = useSessionNavigation();
   return (
     <form
-      action={logoutAction}
+      action={async () => {
+        await logoutAction();
+        window.location.replace("/login");
+      }}
       onSubmit={(event) => {
         const form = event.currentTarget;
         if (request(() => form.requestSubmit())) {
@@ -18,7 +27,7 @@ export function LogoutButton({ collapsed = false }: { collapsed?: boolean }) {
           return;
         }
         localStorage.removeItem(
-          onboardingDraftStorageKey(window.location.origin),
+          onboardingDraftStorageKey(window.location.origin, userId),
         );
       }}
     >
