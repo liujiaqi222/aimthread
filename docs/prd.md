@@ -6,6 +6,8 @@
 
 **Status:** 产品范围已确认；按本文与 [T06–T10](tickets/README.md) 实施，尚未代表功能已上线。
 
+**范围修订（2026-10-18）：** 已确认切换为独立个人账户与 Google / GitHub 登录，见 [ADR-0001](adr/0001-multi-user-social-login.md)。同邮箱关联规则见 [ADR-0002](adr/0002-verified-email-login-identities.md)；本轮不提供不同邮箱主动绑定。该修订尚未实现。
+
 本文是当前产品与行为规范。本文中的具体默认值是为实现收敛的工程与交互选择，可在实际体验后调整，不增加 MVP 模块。
 
 ## 1. 定位与唯一核心链路
@@ -33,7 +35,7 @@ AimThread 帮用户围绕目标开始执行、留下进展，并在下次打开�
 
 ### 1.2 用户与部署范围
 
-首先满足个人每日稳定使用。一个部署对应一个用户，沿用 Vercel + Neon 自托管方式；无 users、团队、租户、订阅或社交。接入 AI 可选，不内置 LLM API 或聊天。
+首先满足个人每日稳定使用。同一部署支持多个相互独立的个人账户，沿用 Vercel + Neon；任何人可通过 Google 或 GitHub 首次登录并自助创建账户，只保留这两种登录方式。本轮不引入团队、共享目标、订阅或用户间社交。接入 AI 可选，不内置 LLM API 或聊天。
 
 ## 2. MVP 功能边界
 
@@ -49,7 +51,7 @@ AimThread 帮用户围绕目标开始执行、留下进展，并在下次打开�
 
 本轮不做：习惯 / 重复任务系统、今日重点对象、每日必填计划、专用最小行动模块、十二周周期、WOOP 表单、自定义领先指标、计划达成率、目标完成百分比、生产力评分、周期复盘系统、内置 AI 聊天 / 自动教练、复杂计时预设、循环编排、排行榜与奖励体系。用户可在说明中写行动约定，不由此产生排程或评分功能。
 
-不新增日历集成、子任务树、看板、甘特图、附件、富文本、原生 App、浏览器扩展、多用户、第三方社交登录或 hard delete。ChatGPT Plugin 所需的 OAuth 2.1 授权服务属于 MCP 安全边界，不扩张为通用身份平台。可选到时提示音属于计时反馈；后台推送与定时提醒服务不属于本轮。
+不新增日历集成、子任务树、看板、甘特图、附件、富文本、原生 App、浏览器扩展或 hard delete。多用户与 Google / GitHub 登录已纳入范围；ChatGPT Plugin 所需的 OAuth 2.1 授权服务属于 MCP 安全边界。可选到时提示音属于计时反馈；后台推送与定时提醒服务不属于本轮。
 
 ## 3. 核心模型与状态
 
@@ -126,7 +128,7 @@ v3 运行模型只保留 Goal、Task、Session 及必需内部记录。Task 与 
 
 目标标题是唯一必填内容。过程支持返回编辑、跳过可选项、减少动态效果、键盘和移动端；过渡不延迟操作。日后新增目标使用简短版本。
 
-草稿仅需支持同一浏览器中断后恢复，存储按实例隔离并在退出登录时清除。已保存目标和选择以服务端为准；重复提交不重复创建。既有可执行目标不重播引导；全部目标非 active 时可建立或重新启用，仍允许看足迹。
+草稿仅需支持同一浏览器中断后恢复，存储按站点与用户隔离并在退出登录时清除。已保存目标和选择以服务端为准；重复提交不重复创建。既有可执行目标不重播引导；全部目标非 active 时可建立或重新启用，仍允许看足迹。
 
 ### 4.2 AI 路径
 
@@ -176,7 +178,7 @@ v3 运行模型只保留 Goal、Task、Session 及必需内部记录。Task 与 
 
 ### 6.1 通用规则
 
-- 全实例最多一个未结束计时过程，专注、休息、暂停、到时等待均占用该位置。
+- 每个用户最多一个未结束计时过程，专注、休息、暂停、到时等待均占用该位置；不同用户可同时计时。
 - 开始验证 active Goal、可选 pending Task 与归属。并发 start 由事务 / 数据库保证只能有一个成功。
 - 服务端时间为准，响应包含 serverNow、当前阶段、阶段截止时间、版本和可用操作。客户端仅渲染并在重连 / 回到前台时校准。
 - 刷新、关页、换设备不重置时间。浏览器后台节流或提醒失败不影响计时结算。
@@ -320,11 +322,13 @@ Goal / tasks 创建、Session start / log 支持 idempotencyKey；同 key 同输
 
 Web 展示可理解的恢复动作，MCP 返回 code / message / 必需 context。不要把正常状态冲突升级为整页崩溃，也不要静默吞掉写失败。
 
-### 9.4 身份与自托管
+### 9.4 身份与部署
 
-使用 `DATABASE_URL`、`BETTER_AUTH_SECRET` 与实例公开 `BETTER_AUTH_URL`。Web 仍是单实例单用户，但首次访问在数据库中建立 owner 账户；Cookie 使用 HttpOnly、生产 Secure、SameSite=Lax 和 90 天滑动有效期。登出失效，Secret 轮换使旧会话与令牌失效；登录与写请求继续具备速率限制和同源保护。
+使用 `DATABASE_URL`、`BETTER_AUTH_SECRET` 与站点公开 `BETTER_AUTH_URL`，配置 Google / GitHub OAuth 凭证。通过第三方登录建立或识别个人账户，移除固定 owner 与实例密码入口；相同邮箱且已有用户邮箱与新登录身份邮箱均已验证时，自动关联到同一用户，其他情况不因邮箱相同而自动关联。不同邮箱对应独立用户，本轮不提供主动绑定、解绑或已有用户之间的数据合并。Cookie 使用 HttpOnly、生产 Secure、SameSite=Lax 和 90 天滑动有效期。登出失效，Secret 轮换使旧会话与令牌失效；登录与写请求继续具备速率限制和同源保护。
 
-MCP 使用 `/mcp` Streamable HTTP 与 OAuth 2.1 authorization-code + PKCE。ChatGPT Plugin 是 OAuth client，AimThread 同时是 authorization server 与 resource server：发布 protected-resource / authorization-server metadata，以 CIMD 确认 ChatGPT 客户端，并按 `aimthread:read`、`aimthread:write` scope 签发 audience 绑定的短期 access token 与可撤销 refresh token。用户在 AimThread 登录及确认授权；ChatGPT 不接触实例密码，网页也不展示静态 MCP token。
+正式站点为 `https://aimthread.com`，本地开发为 `http://localhost:3000`；两者的 Google / GitHub 登录均须配置并真实验收。本轮不支持每个 Vercel Preview 地址登录，远程测试登录可后续配置固定测试域名。
+
+MCP 使用 `/mcp` Streamable HTTP 与 OAuth 2.1 authorization-code + PKCE。ChatGPT Plugin 是 OAuth client，AimThread 同时是 authorization server 与 resource server：发布 protected-resource / authorization-server metadata，以 CIMD 确认 ChatGPT 客户端，并按 `aimthread:read`、`aimthread:write` scope 签发 audience 绑定的短期 access token 与可撤销 refresh token。用户从 ChatGPT 发起连接时，未登录则先完成 Google / GitHub 登录，再自动返回原授权页；确认授权后，ChatGPT 只能访问该用户的数据。网页登录后可直接使用产品，AI 连接保持可选；网页不展示静态 MCP token。
 
 部署运行提交的建库 / schema migration，Setup 不自行建表。验证新版本空库初始化，不要求旧库升级；本轮不扩张为新的部署平台功能。对外发布前以实际环境复验文档描述，未进行线上验证则明确标注。
 
@@ -334,7 +338,8 @@ MCP 使用 `/mcp` Streamable HTTP 与 OAuth 2.1 authorization-code + PKCE。Chat
 - 所有选择推进、状态修改、阶段切换和幂等落账在事务内完成；统一锁顺序，避免 start 与 archive 竞态。
 - 新版本内的备注 / 资源 / 打断、任务完成信息和执行来源可追溯。
 - 产品内无 hard delete；目标 / 任务使用归档，执行使用取消。
-- 数据权限依旧为单实例单用户，不因重构放松鉴权。
+- Goal、Task、Session、设置、当前选择及统计按用户隔离；Web 与 MCP 都从已验证身份确定用户，不接受客户端指定数据所有者。
+- 幂等记录与并发锁按用户限定作用域，避免不同用户之间交叉重放或相互阻塞。
 
 ## 11. 直接重构与渐进交付
 

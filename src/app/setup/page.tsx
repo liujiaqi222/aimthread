@@ -11,12 +11,13 @@ import { settingsService } from "@/services";
 export const dynamic = "force-dynamic";
 
 export default async function SetupPage() {
-  if (!(await readWebSession())) redirect("/login");
+  const context = await readWebSession();
+  if (!context) redirect("/login");
 
   let settings;
   try {
-    await settingsService.checkSchema({ actor: "web" });
-    settings = await settingsService.get({ actor: "web" });
+    await settingsService.checkSchema(context);
+    settings = await settingsService.get(context);
   } catch {
     return (
       <main className="mx-auto flex min-h-screen max-w-2xl items-center px-5 py-12">

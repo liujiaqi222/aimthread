@@ -22,7 +22,9 @@ test("root reaches login without JavaScript when signed out", async ({
     await expect(
       page.getByRole("heading", { name: "AimThread", exact: true }),
     ).toBeVisible();
-    await expect(page.locator("#password")).toBeVisible();
+    await expect(
+      page.getByText("账户登录升级中", { exact: true }),
+    ).toBeVisible();
   } finally {
     await context.close();
   }

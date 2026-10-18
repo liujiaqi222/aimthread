@@ -1,5 +1,7 @@
 "use server";
 
+import type { AuthenticatedContext } from "@/auth/context";
+
 import { redirect } from "next/navigation";
 
 import { sessionContract } from "@/adapters/session-contract";
@@ -25,32 +27,34 @@ import type {
   DistractionUpdateInput,
 } from "@/shared/schemas/session";
 
-const context = { actor: "web" } as const;
-
-async function authorize(): Promise<void> {
-  if (!(await readWebSession())) redirect("/login");
+async function authorize() {
+  const context = await readWebSession();
+  if (!context) redirect("/login");
+  return context;
 }
 
-async function run<T>(work: () => Promise<T>): Promise<Result<T>> {
-  await authorize();
+async function run<T>(
+  work: (context: AuthenticatedContext) => Promise<T>,
+): Promise<Result<T>> {
+  const context = await authorize();
   // These authenticated routes are force-dynamic. The client already applies
   // each mutation's returned value, so revalidating here would make Next.js
   // render the current layout and page before returning the action result.
   // That turns a small timer mutation into a full dashboard roundtrip.
-  return sessionContract(work);
+  return sessionContract(() => work(context));
 }
 
 // ---- Dashboard / selection -----------------------------------------------
 
 export async function getDashboardAction(): Promise<Result<DashboardData>> {
-  await authorize();
+  const context = await authorize();
   return sessionContract(() => dashboardService.getDashboard(context));
 }
 
 export async function getActiveSessionAction(): Promise<
   Result<SessionView | null>
 > {
-  await authorize();
+  const context = await authorize();
   return sessionContract(() => sessionService.getActiveSession(context));
 }
 
@@ -58,18 +62,18 @@ export async function selectionSetAction(input: {
   goalId: string;
   taskId?: string | null;
 }): Promise<Result<EffectiveSelection>> {
-  return run(() => selectionService.set(context, input));
+  return run((context) => selectionService.set(context, input));
 }
 
 export async function selectionClearAction(): Promise<Result<null>> {
-  return run(async () => {
+  return run(async (context) => {
     await selectionService.clear(context);
     return null;
   });
 }
 
 export async function listTasksAction(goalId: string): Promise<Result<Task[]>> {
-  await authorize();
+  const context = await authorize();
   return sessionContract(async () => {
     const page = await planningService.listTasks(context, goalId, {
       status: "pending",
@@ -88,7 +92,7 @@ export async function startSessionAction(input: {
   timerMode?: "stopwatch" | "pomodoro";
   idempotencyKey?: string;
 }): Promise<Result<SessionView>> {
-  return run(() =>
+  return run((context) =>
     sessionService.startSession(context, {
       goalId: input.goalId,
       taskId: input.taskId ?? null,
@@ -102,13 +106,13 @@ export async function startSessionAction(input: {
 export async function pauseSessionAction(
   sessionId: string,
 ): Promise<Result<SessionView>> {
-  return run(() => sessionService.pauseSession(context, sessionId));
+  return run((context) => sessionService.pauseSession(context, sessionId));
 }
 
 export async function resumeSessionAction(
   sessionId: string,
 ): Promise<Result<SessionView>> {
-  return run(() => sessionService.resumeSession(context, sessionId));
+  return run((context) => sessionService.resumeSession(context, sessionId));
 }
 
 export async function finishSessionAction(input: {
@@ -116,7 +120,7 @@ export async function finishSessionAction(input: {
   note?: string | null;
   noteExpectedVersion?: number;
 }): Promise<Result<SessionView>> {
-  return run(() =>
+  return run((context) =>
     sessionService.finishSession(context, input.sessionId, {
       note: input.note,
       noteExpectedVersion: input.noteExpectedVersion,
@@ -127,13 +131,13 @@ export async function finishSessionAction(input: {
 export async function cancelSessionAction(
   sessionId: string,
 ): Promise<Result<SessionView>> {
-  return run(() => sessionService.cancelSession(context, sessionId));
+  return run((context) => sessionService.cancelSession(context, sessionId));
 }
 
 export async function getSessionAction(
   sessionId: string,
 ): Promise<Result<SessionDetail>> {
-  await authorize();
+  const context = await authorize();
   return sessionContract(() => sessionService.getSession(context, sessionId));
 }
 
@@ -142,7 +146,7 @@ export async function updateNoteAction(input: {
   note: string | null;
   expectedVersion: number;
 }): Promise<Result<SessionView>> {
-  return run(() =>
+  return run((context) =>
     sessionService.updateNote(context, {
       id: input.sessionId,
       note: input.note,
@@ -156,7 +160,7 @@ export async function updateResumeHintAction(input: {
   resumeHint: string | null;
   expectedVersion: number;
 }): Promise<Result<SessionView>> {
-  return run(() =>
+  return run((context) =>
     sessionService.updateResumeHint(context, {
       id: input.sessionId,
       resumeHint: input.resumeHint,
@@ -168,7 +172,7 @@ export async function updateResumeHintAction(input: {
 export async function completeTaskAction(
   taskId: string,
 ): Promise<Result<Task>> {
-  return run(() => planningService.completeTask(context, taskId));
+  return run((context) => planningService.completeTask(context, taskId));
 }
 
 // ---- First goal (empty state) ---------------------------------------------
@@ -177,7 +181,7 @@ export async function createGoalAction(input: {
   title: string;
   description?: string | null;
 }): Promise<Result<Goal>> {
-  return run(() =>
+  return run((context) =>
     planningService.createGoal(context, {
       title: input.title,
       description: input.description ?? null,
@@ -189,7 +193,7 @@ export async function quickAddTaskAction(input: {
   goalId: string;
   title: string;
 }): Promise<Result<Task[]>> {
-  return run(() =>
+  return run((context) =>
     planningService.createTasks(context, {
       goalId: input.goalId,
       tasks: [{ title: input.title }],
@@ -202,26 +206,28 @@ export async function quickAddTaskAction(input: {
 export async function createDistractionAction(
   input: DistractionCreateInput,
 ): Promise<Result<Distraction>> {
-  return run(() => distractionService.createDistraction(context, input));
+  return run((context) => distractionService.createDistraction(context, input));
 }
 
 export async function updateDistractionAction(
   id: string,
   input: DistractionUpdateInput,
 ): Promise<Result<Distraction>> {
-  return run(() => distractionService.updateDistraction(context, id, input));
+  return run((context) =>
+    distractionService.updateDistraction(context, id, input),
+  );
 }
 
 export async function archiveDistractionAction(
   id: string,
 ): Promise<Result<Distraction>> {
-  return run(() => distractionService.archiveDistraction(context, id));
+  return run((context) => distractionService.archiveDistraction(context, id));
 }
 
 export async function listDistractionsAction(
   sessionId: string,
 ): Promise<Result<Distraction[]>> {
-  await authorize();
+  const context = await authorize();
   return sessionContract(() =>
     distractionService.listDistractions(context, { sessionId }),
   );
@@ -230,12 +236,12 @@ export async function listDistractionsAction(
 export async function advanceSessionAction(
   input: SessionAdvanceInput,
 ): Promise<Result<SessionView>> {
-  return run(() => sessionService.advanceSession(context, input));
+  return run((context) => sessionService.advanceSession(context, input));
 }
 
 export async function saveTimerPreferencesAction(input: {
   timerMode?: "stopwatch" | "pomodoro";
   timerPreferences?: TimerConfig;
 }) {
-  return run(() => settingsService.update(context, input));
+  return run((context) => settingsService.update(context, input));
 }

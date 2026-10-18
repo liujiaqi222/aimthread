@@ -1,6 +1,7 @@
+import { ownedBy } from "@/services/ownership";
 import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 
-import type { AuthenticatedContext } from "@/auth/context";
+import { requireUserId, type AuthenticatedContext } from "@/auth/context";
 import type { Database } from "@/db/client";
 import { goals, sessions, tasks, type Goal, type Task } from "@/db/schema";
 import { appSettings, type AppSettings } from "@/db/schema";
@@ -53,6 +54,7 @@ export interface DashboardService {
 /** The latest effective completed Session's resume hint (PRD §5.3). */
 async function latestResumeHint(
   database: Database,
+  context: AuthenticatedContext,
   target: { taskId: string } | { goalId: string; goalOnly: true },
 ): Promise<string | null> {
   const conditions = [
@@ -70,7 +72,7 @@ async function latestResumeHint(
   const [row] = await database
     .select({ resumeHint: sessions.resumeHint })
     .from(sessions)
-    .where(and(...conditions))
+    .where(and(ownedBy(context, sessions), ...conditions))
     .orderBy(desc(sessions.endedAt), desc(sessions.startedAt))
     .limit(1);
   return row?.resumeHint ?? null;
@@ -88,7 +90,7 @@ export function createDashboardService(
 
   return {
     async getDashboard(context) {
-      void context;
+      requireUserId(context);
       const now = new Date();
       const [
         activeSession,
@@ -106,7 +108,7 @@ export function createDashboardService(
         database
           .select({ goal: goals })
           .from(goals)
-          .where(eq(goals.status, "active"))
+          .where(and(ownedBy(context, goals), eq(goals.status, "active")))
           .orderBy(asc(goals.position)),
         // Pending Task counts for the switcher, one query for all goals.
         database
@@ -115,7 +117,7 @@ export function createDashboardService(
             count: sql<number>`count(*)`,
           })
           .from(tasks)
-          .where(eq(tasks.status, "pending"))
+          .where(and(ownedBy(context, tasks), eq(tasks.status, "pending")))
           .groupBy(tasks.goalId),
       ]);
 
@@ -132,13 +134,15 @@ export function createDashboardService(
           database
             .select()
             .from(goals)
-            .where(eq(goals.id, resolved.goalId))
+            .where(and(ownedBy(context, goals), eq(goals.id, resolved.goalId)))
             .limit(1),
           resolved.taskId
             ? database
                 .select()
                 .from(tasks)
-                .where(eq(tasks.id, resolved.taskId))
+                .where(
+                  and(ownedBy(context, tasks), eq(tasks.id, resolved.taskId)),
+                )
                 .limit(1)
             : Promise.resolve([] as Task[]),
           database
@@ -146,6 +150,7 @@ export function createDashboardService(
             .from(tasks)
             .where(
               and(
+                ownedBy(context, tasks),
                 eq(tasks.goalId, resolved.goalId),
                 eq(tasks.status, "pending"),
               ),
@@ -153,8 +158,8 @@ export function createDashboardService(
             .orderBy(asc(tasks.position))
             .limit(8),
           resolved.taskId
-            ? latestResumeHint(database, { taskId: resolved.taskId })
-            : latestResumeHint(database, {
+            ? latestResumeHint(database, context, { taskId: resolved.taskId })
+            : latestResumeHint(database, context, {
                 goalId: resolved.goalId,
                 goalOnly: true,
               }),
@@ -176,7 +181,12 @@ export function createDashboardService(
       const [settings] = await database
         .select()
         .from(appSettings)
-        .where(eq(appSettings.id, "default"));
+        .where(
+          and(
+            ownedBy(context, appSettings),
+            eq(appSettings.userId, context.userId),
+          ),
+        );
       return {
         timerSettings: settings
           ? {

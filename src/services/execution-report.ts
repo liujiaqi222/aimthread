@@ -1,7 +1,8 @@
+import { ownedBy } from "@/services/ownership";
 import { and, asc, desc, eq, gt, isNotNull, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type { AuthenticatedContext } from "@/auth/context";
+import { requireUserId, type AuthenticatedContext } from "@/auth/context";
 import type { Database } from "@/db/client";
 import { goals, sessions, tasks } from "@/db/schema";
 import { focusSecondsSql } from "@/services/focus-query";
@@ -31,7 +32,7 @@ export function createExecutionReportService(
 ): ExecutionReportService {
   return {
     async getTaskFocusSeconds(context, input) {
-      void context;
+      requireUserId(context);
       const goalIds = parsed(
         z.array(z.string().uuid()).max(100).safeParse(input),
       );
@@ -42,7 +43,7 @@ export function createExecutionReportService(
         focus_seconds: string;
       }>(sql`
         select s.task_id, coalesce(sum(${focusSecondsSql(sql`s`, sql`'-infinity'::timestamptz`, sql`${now}::timestamptz`, now)}), 0)::text as focus_seconds
-        from sessions s where s.goal_id in (${sql.join(
+        from sessions s where s.user_id = ${context.userId} and s.goal_id in (${sql.join(
           goalIds.map((id) => sql`${id}::uuid`),
           sql`, `,
         )}) and s.task_id is not null group by s.task_id
@@ -52,7 +53,7 @@ export function createExecutionReportService(
       );
     },
     async getGoalContext(context, input) {
-      void context;
+      requireUserId(context);
       const { goalId } = parsed(goalContextQuerySchema.safeParse(input));
       return database.transaction(
         async (tx) => {
@@ -60,7 +61,7 @@ export function createExecutionReportService(
           const [goal] = await tx
             .select()
             .from(goals)
-            .where(eq(goals.id, goalId));
+            .where(and(ownedBy(context, goals), eq(goals.id, goalId)));
           if (!goal)
             throw new DomainError("GOAL_NOT_FOUND", "Goal was not found.", {
               goalId,
@@ -68,14 +69,14 @@ export function createExecutionReportService(
           const taskRows = await tx
             .select()
             .from(tasks)
-            .where(eq(tasks.goalId, goalId))
+            .where(and(ownedBy(context, tasks), eq(tasks.goalId, goalId)))
             .orderBy(asc(tasks.position));
           const effort = await tx.execute<{
             task_id: string | null;
             focus_seconds: string;
           }>(sql`
           select s.task_id, coalesce(sum(${focusSecondsSql(sql`s`, sql`'-infinity'::timestamptz`, sql`${now}::timestamptz`, now)}), 0)::text as focus_seconds
-          from sessions s where s.goal_id = ${goalId} group by s.task_id
+          from sessions s where s.user_id = ${context.userId} and s.goal_id = ${goalId} group by s.task_id
         `);
           const byTask = new Map(
             effort.rows.map((row) => [row.task_id, Number(row.focus_seconds)]),
@@ -93,7 +94,7 @@ export function createExecutionReportService(
               resumeHint: sessions.resumeHint,
             })
             .from(sessions)
-            .where(effectiveCompleted)
+            .where(and(ownedBy(context, sessions), effectiveCompleted))
             .orderBy(
               sessions.taskId,
               desc(sessions.endedAt),
@@ -112,7 +113,7 @@ export function createExecutionReportService(
               resumeHint: sessions.resumeHint,
             })
             .from(sessions)
-            .where(effectiveCompleted)
+            .where(and(ownedBy(context, sessions), effectiveCompleted))
             .orderBy(
               desc(sessions.endedAt),
               desc(sessions.startedAt),

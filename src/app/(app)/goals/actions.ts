@@ -5,8 +5,9 @@ import { executionReportService } from "@/services";
 import { planningContract } from "@/adapters/planning-contract";
 
 export async function getGoalContextAction(goalId: string) {
-  if (!(await readWebSession())) return { ok: false as const };
+  const context = await readWebSession();
+  if (!context) return { ok: false as const };
   return planningContract(() =>
-    executionReportService.getGoalContext({ actor: "web" }, { goalId }),
+    executionReportService.getGoalContext(context, { goalId }),
   );
 }

@@ -1,6 +1,7 @@
+import { ownedBy } from "@/services/ownership";
 import { asc, eq, inArray, isNull, and, sql } from "drizzle-orm";
 
-import type { AuthenticatedContext } from "@/auth/context";
+import { requireUserId, type AuthenticatedContext } from "@/auth/context";
 import type { Database } from "@/db/client";
 import {
   appSettings,
@@ -94,6 +95,7 @@ function nullableDate(value: unknown): Date | null {
 function sessionFromJson(row: JsonRecord): Session {
   return {
     id: String(row.id),
+    userId: String(row.user_id),
     goalId: String(row.goal_id),
     taskId: row.task_id == null ? null : String(row.task_id),
     status: row.status as Session["status"],
@@ -120,6 +122,7 @@ function sessionFromJson(row: JsonRecord): Session {
 function goalFromJson(row: JsonRecord): Goal {
   return {
     id: String(row.id),
+    userId: String(row.user_id),
     title: String(row.title),
     description: row.description == null ? null : String(row.description),
     status: row.status as Goal["status"],
@@ -301,17 +304,24 @@ export function availableSessionActions(status: Session["status"]): string[] {
 
 async function loadIntervals(
   tx: Database | Transaction,
+  context: AuthenticatedContext,
   sessionId: string,
 ): Promise<FocusInterval[]> {
   return tx
     .select()
     .from(focusIntervals)
-    .where(eq(focusIntervals.sessionId, sessionId))
+    .where(
+      and(
+        ownedBy(context, focusIntervals),
+        eq(focusIntervals.sessionId, sessionId),
+      ),
+    )
     .orderBy(asc(focusIntervals.startedAt), asc(focusIntervals.id));
 }
 
 async function sessionSnapshot(
   tx: Database | Transaction,
+  context: AuthenticatedContext,
   filter: ReturnType<typeof sql>,
 ) {
   const result = await tx.execute<FastSessionRow>(sql`
@@ -320,17 +330,22 @@ async function sessionSnapshot(
       coalesce((select json_agg(fi order by fi.started_at, fi.id) from focus_intervals fi where fi.session_id = s.id), '[]'::json) as intervals,
       coalesce((select json_agg(p order by p.sequence) from session_phases p where p.session_id = s.id), '[]'::json) as phases
     from sessions s join goals g on g.id = s.goal_id left join tasks t on t.id = s.task_id
-    where ${filter} limit 1
+    where s.user_id = ${requireUserId(context)} and ${filter} limit 1
   `);
   return result.rows[0] ?? null;
 }
 
 async function buildView(
   tx: Database | Transaction,
+  context: AuthenticatedContext,
   session: Session,
   now: Date,
 ): Promise<SessionView> {
-  const row = await sessionSnapshot(tx, sql`s.id = ${session.id}::uuid`);
+  const row = await sessionSnapshot(
+    tx,
+    context,
+    sql`s.id = ${session.id}::uuid`,
+  );
   if (!row)
     throw new DomainError("SESSION_NOT_FOUND", "Session was not found.", {
       sessionId: session.id,
@@ -340,6 +355,7 @@ async function buildView(
 
 async function findSessionRow(
   tx: Database | Transaction,
+  context: AuthenticatedContext,
   id: string,
 ): Promise<Session> {
   if (!id) {
@@ -350,7 +366,7 @@ async function findSessionRow(
   const [session] = await tx
     .select()
     .from(sessions)
-    .where(eq(sessions.id, id))
+    .where(and(ownedBy(context, sessions), eq(sessions.id, id)))
     .limit(1);
   if (!session)
     throw new DomainError("SESSION_NOT_FOUND", "Session was not found.", {
@@ -362,6 +378,7 @@ async function findSessionRow(
 /** Close every open interval of the Session at `now` (pause/finish/cancel). */
 async function closeOpenIntervals(
   tx: Transaction,
+  context: AuthenticatedContext,
   sessionId: string,
   now: Date,
 ): Promise<void> {
@@ -370,6 +387,7 @@ async function closeOpenIntervals(
     .set({ endedAt: now, updatedAt: now })
     .where(
       and(
+        ownedBy(context, focusIntervals),
         eq(focusIntervals.sessionId, sessionId),
         isNull(focusIntervals.endedAt),
       ),
@@ -390,9 +408,13 @@ export function createSessionService(
   const clock = deps.clock ?? (() => new Date());
 
   /** A single database snapshot for Session, phases and intervals, including on another device. */
-  async function readView(id?: string): Promise<SessionView | null> {
+  async function readView(
+    context: AuthenticatedContext,
+    id?: string,
+  ): Promise<SessionView | null> {
     const row = await sessionSnapshot(
       database,
+      context,
       id ? sql`s.id = ${id}::uuid` : sql`s.status in ('active', 'paused')`,
     );
     return row ? viewFromFastRow(row, clock()) : null;
@@ -409,6 +431,7 @@ export function createSessionService(
     context: AuthenticatedContext,
     value: ReturnType<typeof sessionStartSchema.parse>,
   ): Promise<SessionView | null> {
+    requireUserId(context);
     const startedAt = clock();
     const taskId = value.taskId ?? null;
     const createdVia = context.actor === "mcp" ? "mcp" : "web";
@@ -422,40 +445,40 @@ export function createSessionService(
     const defaults = JSON.stringify(configOf(null));
     const result = await database.execute<FastSessionRow>(sql`
       with first_lock as materialized (
-        select pg_advisory_xact_lock(hashtext('sessions:running'))
+        select pg_advisory_xact_lock(hashtext(${JSON.stringify([context.userId, "sessions:running"])}))
       ), selection_lock as materialized (
-        select pg_advisory_xact_lock(hashtext('app:selection'))
+        select pg_advisory_xact_lock(hashtext(${JSON.stringify([context.userId, "app:selection"])}))
         from first_lock
       ), goal_lock as materialized (
-        select pg_advisory_xact_lock(hashtext(${"goal:" + value.goalId}))
+        select pg_advisory_xact_lock(hashtext(${JSON.stringify([context.userId, "goal:" + value.goalId])}))
         from selection_lock
       ), candidate as materialized (
         select g.id, gen_random_uuid() as session_id,
-          ${defaults}::jsonb || coalesce((select timer_preferences from app_settings where id = 'default'), '{}'::jsonb) as config
+          ${defaults}::jsonb || coalesce((select timer_preferences from app_settings where user_id = ${context.userId}), '{}'::jsonb) as config
         from goal_lock
         join goals g on g.id = ${value.goalId}::uuid
         left join tasks t on t.id = ${taskId}::uuid
-        where g.status = 'active'
+        where g.user_id = ${context.userId} and g.status = 'active'
           and (
             ${taskId}::uuid is null
             or (t.goal_id = g.id and t.status = 'pending')
           )
           and not exists (
-            select 1 from sessions s where s.status in ('active', 'paused')
+            select 1 from sessions s where s.user_id = ${context.userId} and s.status in ('active', 'paused')
           )
         for update of g
       ), claimed_key as (
-        insert into idempotency_records (operation, key, request_hash, result_ref, result)
-        select 'session_start', ${key}::text, ${requestHash}, session_id, jsonb_build_object('sessionId', session_id)
+        insert into idempotency_records (user_id, operation, key, request_hash, result_ref, result)
+        select ${context.userId}, 'session_start', ${key}::text, ${requestHash}, session_id, jsonb_build_object('sessionId', session_id)
         from candidate where ${key}::text is not null
         on conflict do nothing returning result_ref
       ), new_session as (
         insert into sessions (
-          id, goal_id, task_id, status, entry_mode, created_via, timer_mode,
+          id, user_id, goal_id, task_id, status, entry_mode, created_via, timer_mode,
           time_basis, timer_config, intent, note, resume_hint, started_at
         )
         select
-          session_id, ${value.goalId}::uuid, ${taskId}::uuid, 'active', 'timer',
+          session_id, ${context.userId}, ${value.goalId}::uuid, ${taskId}::uuid, 'active', 'timer',
           ${createdVia}::session_created_via, ${value.timerMode}::timer_mode, 'observed',
           case when ${value.timerMode} = 'pomodoro' then config else null end,
           ${value.intent ?? null}::text, null, null, ${startedAt}
@@ -476,16 +499,16 @@ export function createSessionService(
         returning *
       ), new_selection as (
         insert into app_settings (
-          id, timezone, week_starts_on, timer_mode,
+          user_id, timezone, week_starts_on, timer_mode,
           selected_goal_id, selected_task_id
         )
-        select 'default', 'UTC', 1, timer_mode, goal_id, task_id
+        select ${context.userId}, 'UTC', 1, timer_mode, goal_id, task_id
         from new_session
-        on conflict (id) do update set
+        on conflict (user_id) do update set
           selected_goal_id = excluded.selected_goal_id,
           selected_task_id = excluded.selected_task_id,
           updated_at = ${startedAt}
-        returning id
+        returning user_id
       )
       select
         row_to_json(ns) as session,
@@ -505,6 +528,7 @@ export function createSessionService(
 
   /** Finish both timer modes in one database roundtrip, including the final note. */
   async function fastFinish(
+    context: AuthenticatedContext,
     value: ReturnType<typeof sessionFinishSchema.parse>,
   ): Promise<SessionView | null> {
     const now = clock();
@@ -512,11 +536,11 @@ export function createSessionService(
     const hasExpectedVersion = value.noteExpectedVersion !== undefined;
     const result = await database.execute<FastSessionRow>(sql`
       with session_lock as materialized (
-        select pg_advisory_xact_lock(hashtext(${"session:" + value.id}))
+        select pg_advisory_xact_lock(hashtext(${JSON.stringify([context.userId, "session:" + value.id])}))
       ), target as materialized (
         select s.*
         from session_lock
-        join sessions s on s.id = ${value.id}::uuid
+        join sessions s on s.id = ${value.id}::uuid and s.user_id = ${requireUserId(context)}
         for update of s
       ), current_phase as materialized (
         select p.* from session_phases p
@@ -628,6 +652,7 @@ export function createSessionService(
    * the precise domain error.
    */
   async function fastTransition(
+    context: AuthenticatedContext,
     id: string,
     operation: "pause" | "resume" | "cancel",
   ): Promise<SessionView | null> {
@@ -641,11 +666,11 @@ export function createSessionService(
           : "active";
     const result = await database.execute<FastSessionRow>(sql`
       with session_lock as materialized (
-        select pg_advisory_xact_lock(hashtext(${"session:" + id}))
+        select pg_advisory_xact_lock(hashtext(${JSON.stringify([context.userId, "session:" + id])}))
       ), locked_session as materialized (
         select s.*
         from session_lock
-        join sessions s on s.id = ${id}::uuid
+        join sessions s on s.id = ${id}::uuid and s.user_id = ${requireUserId(context)}
         for update of s
       ), current_phase as materialized (
         select p.* from session_phases p
@@ -771,14 +796,15 @@ export function createSessionService(
 
   /** Atomically settle and open a phase, then read one fresh response snapshot. */
   async function fastAdvance(
+    context: AuthenticatedContext,
     value: SessionAdvanceInput,
   ): Promise<SessionView | null> {
     const now = clock();
     const result = await database.execute<{ id: string }>(sql`
       with session_lock as materialized (
-        select pg_advisory_xact_lock(hashtext(${"session:" + value.id}))
+        select pg_advisory_xact_lock(hashtext(${JSON.stringify([context.userId, "session:" + value.id])}))
       ), locked_session as materialized (
-        select s.* from session_lock join sessions s on s.id = ${value.id}::uuid
+        select s.* from session_lock join sessions s on s.id = ${value.id}::uuid and s.user_id = ${requireUserId(context)}
         for update of s
       ), current_phase as materialized (
         select p.* from session_phases p join locked_session s on s.id = p.session_id
@@ -828,19 +854,19 @@ export function createSessionService(
       update sessions s set status = 'active', revision = t.revision + 1, updated_at = ${now}
       from target t, marker where s.id = t.id returning s.id
     `);
-    return result.rows[0] ? readView(value.id) : null;
+    return result.rows[0] ? readView(context, value.id) : null;
   }
 
   return {
     async getActiveSession(context) {
-      void context;
-      return readView();
+      requireUserId(context);
+      return readView(context);
     },
 
     async getSession(context, id) {
       parsed(sessionPauseSchema.safeParse({ id }));
       const [view, distractionRows] = await Promise.all([
-        readView(id),
+        readView(context, id),
         distractionService.listDistractions(context, {
           sessionId: id,
           includeArchived: true,
@@ -860,7 +886,7 @@ export function createSessionService(
         if (fast) return fast;
       } catch (error) {
         // A concurrent statement may acquire its snapshot before waiting for
-        // the global lock. The unique constraint arbitrates; retry validation
+        // the User's lock. The unique constraint arbitrates; retry validation
         // in a fresh transaction to return the normal conflict/replay result.
         const cause =
           (error as { cause?: { code?: string; constraint?: string } }).cause ??
@@ -879,13 +905,14 @@ export function createSessionService(
       });
 
       const result = await database.transaction(async (tx) => {
-        // Global open-Session exclusivity first, then the selection sync
+        // Per-User open-Session exclusivity first, then the selection sync
         // (global lock order: sessions:running → app:selection).
-        await lockScope(tx, "sessions:running");
-        await lockScope(tx, "app:selection");
+        await lockScope(tx, context, "sessions:running");
+        await lockScope(tx, context, "app:selection");
 
         const startedAt = clock();
         const session = await withIdempotency({
+          context,
           tx,
           operation: "session_start",
           key: value.idempotencyKey,
@@ -897,7 +924,9 @@ export function createSessionService(
             const [row] = await tx
               .select()
               .from(sessions)
-              .where(eq(sessions.id, sessionId))
+              .where(
+                and(ownedBy(context, sessions), eq(sessions.id, sessionId)),
+              )
               .limit(1);
             return row ?? null;
           },
@@ -905,7 +934,12 @@ export function createSessionService(
             const [existingOpen] = await tx
               .select({ id: sessions.id })
               .from(sessions)
-              .where(inArray(sessions.status, ["active", "paused"] as const))
+              .where(
+                and(
+                  ownedBy(context, sessions),
+                  inArray(sessions.status, ["active", "paused"] as const),
+                ),
+              )
               .limit(1);
             if (existingOpen) {
               throw new DomainError(
@@ -915,11 +949,11 @@ export function createSessionService(
               );
             }
 
-            await lockScope(tx, `goal:${value.goalId}`);
+            await lockScope(tx, context, `goal:${value.goalId}`);
             const [goal] = await tx
               .select()
               .from(goals)
-              .where(eq(goals.id, value.goalId))
+              .where(and(ownedBy(context, goals), eq(goals.id, value.goalId)))
               .limit(1);
             if (!goal)
               throw new DomainError("GOAL_NOT_FOUND", "Goal was not found.", {
@@ -938,7 +972,7 @@ export function createSessionService(
               const [task] = await tx
                 .select()
                 .from(tasks)
-                .where(eq(tasks.id, value.taskId))
+                .where(and(ownedBy(context, tasks), eq(tasks.id, value.taskId)))
                 .limit(1);
               if (!task)
                 throw new DomainError("TASK_NOT_FOUND", "Task was not found.", {
@@ -961,10 +995,16 @@ export function createSessionService(
             const [settings] = await tx
               .select()
               .from(appSettings)
-              .where(eq(appSettings.id, "default"));
+              .where(
+                and(
+                  ownedBy(context, appSettings),
+                  eq(appSettings.userId, context.userId),
+                ),
+              );
             const [created] = await tx
               .insert(sessions)
               .values({
+                userId: context.userId,
                 goalId: value.goalId,
                 taskId: value.taskId ?? null,
                 status: "active",
@@ -995,7 +1035,7 @@ export function createSessionService(
               });
 
             // A successful start syncs the selection (PRD §5.3).
-            await applySelection(tx, {
+            await applySelection(tx, context, {
               goalId: value.goalId,
               taskId: value.taskId ?? null,
             });
@@ -1011,26 +1051,26 @@ export function createSessionService(
         return {
           session,
           now: startedAt,
-          view: await buildView(tx, session, startedAt),
+          view: await buildView(tx, context, session, startedAt),
         };
       });
       return result.view;
     },
 
     async advanceSession(context, input) {
-      void context;
+      requireUserId(context);
       const value = parsed(sessionAdvanceSchema.safeParse(input));
-      const fast = await fastAdvance(value);
+      const fast = await fastAdvance(context, value);
       if (fast) return fast;
       return database.transaction(async (tx) => {
-        await lockScope(tx, `session:${value.id}`);
-        const session = await findSessionRow(tx, value.id);
+        await lockScope(tx, context, `session:${value.id}`);
+        const session = await findSessionRow(tx, context, value.id);
         const now = clock();
         const phase = await settlePhase(tx, session, now);
         const phases = await loadPhases(tx, session.id);
         const expected = phases.find((p) => p.id === value.expectedPhaseId);
         if (expected?.advanceAction === value.action && expected.nextPhaseId)
-          return buildView(tx, session, now);
+          return buildView(tx, context, session, now);
         if (!phase || phase.id !== value.expectedPhaseId)
           throw new DomainError(
             "STALE_SESSION_PHASE",
@@ -1048,7 +1088,7 @@ export function createSessionService(
             "This action is unavailable in the current phase.",
             { status: session.status },
           );
-        await closeOpenIntervals(tx, session.id, now);
+        await closeOpenIntervals(tx, context, session.id, now);
         await endPhase(tx, phase, now);
         const next = await openPhase(
           tx,
@@ -1062,7 +1102,12 @@ export function createSessionService(
         await tx
           .update(sessionPhases)
           .set({ advanceAction: value.action, nextPhaseId: next.id })
-          .where(eq(sessionPhases.id, phase.id));
+          .where(
+            and(
+              ownedBy(context, sessionPhases),
+              eq(sessionPhases.id, phase.id),
+            ),
+          );
         const [updated] = await tx
           .update(sessions)
           .set({
@@ -1070,21 +1115,21 @@ export function createSessionService(
             revision: session.revision + 1,
             updatedAt: now,
           })
-          .where(eq(sessions.id, session.id))
+          .where(and(ownedBy(context, sessions), eq(sessions.id, session.id)))
           .returning();
-        return buildView(tx, updated, now);
+        return buildView(tx, context, updated, now);
       });
     },
 
     async pauseSession(context, id) {
-      void context;
+      requireUserId(context);
       parsed(sessionPauseSchema.safeParse({ id }));
-      const fast = await fastTransition(id, "pause");
+      const fast = await fastTransition(context, id, "pause");
       if (fast) return fast;
 
       const result = await database.transaction(async (tx) => {
-        await lockScope(tx, `session:${id}`);
-        const session = await findSessionRow(tx, id);
+        await lockScope(tx, context, `session:${id}`);
+        const session = await findSessionRow(tx, context, id);
         const now = clock();
         const phase = await settlePhase(tx, session, now);
 
@@ -1094,7 +1139,11 @@ export function createSessionService(
             "This phase is due. Choose the next phase or finish.",
           );
         if (session.status === "paused") {
-          return { session, now, view: await buildView(tx, session, now) };
+          return {
+            session,
+            now,
+            view: await buildView(tx, context, session, now),
+          };
         }
         if (session.status !== "active") {
           throw new DomainError(
@@ -1104,7 +1153,7 @@ export function createSessionService(
           );
         }
 
-        await closeOpenIntervals(tx, id, now);
+        await closeOpenIntervals(tx, context, id, now);
         if (phase) await pausePhase(tx, phase, now);
         const [updated] = await tx
           .update(sessions)
@@ -1113,26 +1162,26 @@ export function createSessionService(
             revision: session.revision + 1,
             updatedAt: now,
           })
-          .where(eq(sessions.id, id))
+          .where(and(ownedBy(context, sessions), eq(sessions.id, id)))
           .returning();
         return {
           session: updated!,
           now,
-          view: await buildView(tx, updated!, now),
+          view: await buildView(tx, context, updated!, now),
         };
       });
       return result.view;
     },
 
     async resumeSession(context, id) {
-      void context;
+      requireUserId(context);
       parsed(sessionResumeSchema.safeParse({ id }));
-      const fast = await fastTransition(id, "resume");
+      const fast = await fastTransition(context, id, "resume");
       if (fast) return fast;
 
       const result = await database.transaction(async (tx) => {
-        await lockScope(tx, `session:${id}`);
-        const session = await findSessionRow(tx, id);
+        await lockScope(tx, context, `session:${id}`);
+        const session = await findSessionRow(tx, context, id);
         const now = clock();
         const phase = await settlePhase(tx, session, now);
 
@@ -1142,7 +1191,11 @@ export function createSessionService(
             "This phase is due. Choose the next phase or finish.",
           );
         if (session.status === "active") {
-          return { session, now, view: await buildView(tx, session, now) };
+          return {
+            session,
+            now,
+            view: await buildView(tx, context, session, now),
+          };
         }
         if (session.status !== "paused") {
           throw new DomainError(
@@ -1166,29 +1219,29 @@ export function createSessionService(
             revision: session.revision + 1,
             updatedAt: now,
           })
-          .where(eq(sessions.id, id))
+          .where(and(ownedBy(context, sessions), eq(sessions.id, id)))
           .returning();
         return {
           session: updated!,
           now,
-          view: await buildView(tx, updated!, now),
+          view: await buildView(tx, context, updated!, now),
         };
       });
       return result.view;
     },
 
     async finishSession(context, id, input) {
-      void context;
+      requireUserId(context);
       const value = parsed(
         sessionFinishSchema.safeParse({ ...(input ?? {}), id }),
       );
 
-      const fast = await fastFinish(value);
+      const fast = await fastFinish(context, value);
       if (fast) return fast;
 
       const result = await database.transaction(async (tx) => {
-        await lockScope(tx, `session:${id}`);
-        const session = await findSessionRow(tx, value.id);
+        await lockScope(tx, context, `session:${id}`);
+        const session = await findSessionRow(tx, context, value.id);
         const now = clock();
         const phase = await settlePhase(tx, session, now);
 
@@ -1198,7 +1251,7 @@ export function createSessionService(
             session,
             now,
             noteConflict: false,
-            view: await buildView(tx, session, now),
+            view: await buildView(tx, context, session, now),
           };
         }
         if (session.status !== "active" && session.status !== "paused") {
@@ -1209,9 +1262,9 @@ export function createSessionService(
           );
         }
 
-        await closeOpenIntervals(tx, id, now);
+        await closeOpenIntervals(tx, context, id, now);
         await endPhase(tx, phase, now);
-        const intervals = await loadIntervals(tx, id);
+        const intervals = await loadIntervals(tx, context, id);
         const durationSeconds = focusSecondsOfIntervals(intervals, now);
 
         // Optional final note with version check (PRD §6.5): a stale note
@@ -1242,14 +1295,14 @@ export function createSessionService(
             revision: session.revision + 1,
             updatedAt: now,
           })
-          .where(eq(sessions.id, id))
+          .where(and(ownedBy(context, sessions), eq(sessions.id, id)))
           .returning();
 
         return {
           session: updated!,
           now,
           noteConflict,
-          view: await buildView(tx, updated!, now),
+          view: await buildView(tx, context, updated!, now),
         };
       });
       const view = result.view;
@@ -1257,21 +1310,25 @@ export function createSessionService(
     },
 
     async cancelSession(context, id) {
-      void context;
+      requireUserId(context);
       parsed(sessionCancelSchema.safeParse({ id }));
-      const fast = await fastTransition(id, "cancel");
+      const fast = await fastTransition(context, id, "cancel");
       if (fast) return fast;
       const result = await database.transaction(async (tx) => {
-        await lockScope(tx, `session:${id}`);
-        const session = await findSessionRow(tx, id);
+        await lockScope(tx, context, `session:${id}`);
+        const session = await findSessionRow(tx, context, id);
         const now = clock();
         const phase = await settlePhase(tx, session, now);
 
         if (session.status === "cancelled") {
-          return { session, now, view: await buildView(tx, session, now) };
+          return {
+            session,
+            now,
+            view: await buildView(tx, context, session, now),
+          };
         }
 
-        await closeOpenIntervals(tx, id, now);
+        await closeOpenIntervals(tx, context, id, now);
         await endPhase(tx, phase, now);
         const [updated] = await tx
           .update(sessions)
@@ -1281,23 +1338,23 @@ export function createSessionService(
             revision: session.revision + 1,
             updatedAt: now,
           })
-          .where(eq(sessions.id, id))
+          .where(and(ownedBy(context, sessions), eq(sessions.id, id)))
           .returning();
         return {
           session: updated!,
           now,
-          view: await buildView(tx, updated!, now),
+          view: await buildView(tx, context, updated!, now),
         };
       });
       return result.view;
     },
 
     async updateNote(context, input) {
-      void context;
+      requireUserId(context);
       const value = parsed(sessionNoteUpdateSchema.safeParse(input));
       const result = await database.transaction(async (tx) => {
-        await lockScope(tx, `session:${value.id}`);
-        const session = await findSessionRow(tx, value.id);
+        await lockScope(tx, context, `session:${value.id}`);
+        const session = await findSessionRow(tx, context, value.id);
         const now = clock();
         await settlePhase(tx, session, now);
 
@@ -1327,23 +1384,23 @@ export function createSessionService(
             revision: session.revision + 1,
             updatedAt: now,
           })
-          .where(eq(sessions.id, value.id))
+          .where(and(ownedBy(context, sessions), eq(sessions.id, value.id)))
           .returning();
         return {
           session: updated!,
           now,
-          view: await buildView(tx, updated!, now),
+          view: await buildView(tx, context, updated!, now),
         };
       });
       return result.view;
     },
 
     async updateResumeHint(context, input) {
-      void context;
+      requireUserId(context);
       const value = parsed(sessionResumeHintUpdateSchema.safeParse(input));
       const result = await database.transaction(async (tx) => {
-        await lockScope(tx, `session:${value.id}`);
-        const session = await findSessionRow(tx, value.id);
+        await lockScope(tx, context, `session:${value.id}`);
+        const session = await findSessionRow(tx, context, value.id);
         const now = clock();
         await settlePhase(tx, session, now);
 
@@ -1373,12 +1430,12 @@ export function createSessionService(
             revision: session.revision + 1,
             updatedAt: now,
           })
-          .where(eq(sessions.id, value.id))
+          .where(and(ownedBy(context, sessions), eq(sessions.id, value.id)))
           .returning();
         return {
           session: updated!,
           now,
-          view: await buildView(tx, updated!, now),
+          view: await buildView(tx, context, updated!, now),
         };
       });
       return result.view;

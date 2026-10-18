@@ -20,7 +20,8 @@ export async function saveSettingsAction(
   _previous_state: SettingsFormState,
   formData: FormData,
 ): Promise<SettingsFormState> {
-  if (!(await readWebSession())) redirect("/login");
+  const context = await readWebSession();
+  if (!context) redirect("/login");
 
   const parsed = updateSettingsSchema.safeParse({
     timezone: formData.get("timezone"),
@@ -36,7 +37,7 @@ export async function saveSettingsAction(
   const completeSetup = formData.get("mode") === "setup";
   const result = await settingsUpdateContract(
     settingsService,
-    { actor: "web" },
+    context,
     parsed.data,
     { completeSetup },
   );

@@ -1,6 +1,7 @@
+import { ownedBy } from "@/services/ownership";
 import { and, asc, desc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
 
-import type { AuthenticatedContext } from "@/auth/context";
+import { requireUserId, type AuthenticatedContext } from "@/auth/context";
 import type { Database } from "@/db/client";
 import {
   appSettings,
@@ -65,18 +66,26 @@ export interface SelectionService {
 
 async function pendingCandidates(
   db: Database | Transaction,
+  context: AuthenticatedContext,
   goalId: string,
 ): Promise<PendingCandidate[]> {
   return db
     .select({ id: tasks.id, position: tasks.position })
     .from(tasks)
-    .where(and(eq(tasks.goalId, goalId), eq(tasks.status, "pending")))
+    .where(
+      and(
+        ownedBy(context, tasks),
+        eq(tasks.goalId, goalId),
+        eq(tasks.status, "pending"),
+      ),
+    )
     .orderBy(asc(tasks.position));
 }
 
 /** Read the stored {goalId, taskId} columns (no validation, no fallback). */
 export async function readStoredSelection(
   db: Database | Transaction,
+  context: AuthenticatedContext,
 ): Promise<StoredSelection | null> {
   const [row] = await db
     .select({
@@ -84,6 +93,7 @@ export async function readStoredSelection(
       taskId: appSettings.selectedTaskId,
     })
     .from(appSettings)
+    .where(ownedBy(context, appSettings))
     .limit(1);
   if (!row?.goalId) return null;
   return { goalId: row.goalId, taskId: row.taskId };
@@ -97,12 +107,13 @@ export async function readStoredSelection(
  */
 export async function applySelection(
   tx: Transaction,
+  context: AuthenticatedContext,
   selection: StoredSelection | null,
 ): Promise<void> {
   await tx
     .insert(appSettings)
     .values({
-      id: "default",
+      userId: requireUserId(context),
       // Required NOT NULL columns for a first insert; preserved by the
       // conflict update when the row already exists.
       timezone: "UTC",
@@ -112,7 +123,7 @@ export async function applySelection(
       selectedTaskId: selection?.taskId ?? null,
     })
     .onConflictDoUpdate({
-      target: appSettings.id,
+      target: appSettings.userId,
       set: {
         selectedGoalId: selection?.goalId ?? null,
         selectedTaskId: selection?.taskId ?? null,
@@ -128,10 +139,11 @@ export async function applySelection(
  */
 export async function advanceSelectionOnTaskTransition(
   tx: Transaction,
+  context: AuthenticatedContext,
   affected: { goalId: string; taskId: string; nextTaskId: string | null },
 ): Promise<void> {
-  await lockScope(tx, "app:selection");
-  const stored = await readStoredSelection(tx);
+  await lockScope(tx, context, "app:selection");
+  const stored = await readStoredSelection(tx, context);
   if (
     !stored ||
     stored.taskId !== affected.taskId ||
@@ -139,14 +151,16 @@ export async function advanceSelectionOnTaskTransition(
   ) {
     return;
   }
-  await applySelection(tx, {
+  await applySelection(tx, context, {
     goalId: affected.goalId,
     taskId: affected.nextTaskId,
   });
 }
 
 export function createSelectionService(database: Database): SelectionService {
-  async function resolveFromDb(): Promise<ResolvedSelection | null> {
+  async function resolveFromDb(
+    context: AuthenticatedContext,
+  ): Promise<ResolvedSelection | null> {
     // Resolve the independent roots together. Remote Postgres latency is much
     // larger than the work in these small reads, so serial roundtrips made the
     // execution dashboard take several seconds even on a warm connection.
@@ -154,14 +168,20 @@ export function createSelectionService(database: Database): SelectionService {
       database
         .select({ goalId: sessions.goalId, taskId: sessions.taskId })
         .from(sessions)
-        .where(inArray(sessions.status, ["active", "paused"] as const))
+        .where(
+          and(
+            ownedBy(context, sessions),
+            inArray(sessions.status, ["active", "paused"] as const),
+          ),
+        )
         .limit(1),
-      readStoredSelection(database),
+      readStoredSelection(database, context),
       database
         .select({ goalId: sessions.goalId, taskId: sessions.taskId })
         .from(sessions)
         .where(
           and(
+            ownedBy(context, sessions),
             eq(sessions.status, "completed"),
             isNotNull(sessions.endedAt),
             sql`${sessions.durationSeconds} > 0`,
@@ -172,7 +192,7 @@ export function createSelectionService(database: Database): SelectionService {
       database
         .select({ id: goals.id })
         .from(goals)
-        .where(eq(goals.status, "active"))
+        .where(and(ownedBy(context, goals), eq(goals.status, "active")))
         .orderBy(asc(goals.position))
         .limit(1),
     ]);
@@ -193,29 +213,31 @@ export function createSelectionService(database: Database): SelectionService {
         ? database
             .select({ status: goals.status })
             .from(goals)
-            .where(eq(goals.id, stored.goalId))
+            .where(and(ownedBy(context, goals), eq(goals.id, stored.goalId)))
             .limit(1)
         : Promise.resolve([]),
-      stored ? pendingCandidates(database, stored.goalId) : Promise.resolve([]),
+      stored
+        ? pendingCandidates(database, context, stored.goalId)
+        : Promise.resolve([]),
       stored?.taskId
         ? database
             .select({ position: tasks.position })
             .from(tasks)
-            .where(eq(tasks.id, stored.taskId))
+            .where(and(ownedBy(context, tasks), eq(tasks.id, stored.taskId)))
             .limit(1)
         : Promise.resolve([]),
       recentRow
         ? database
             .select({ status: goals.status })
             .from(goals)
-            .where(eq(goals.id, recentRow.goalId))
+            .where(and(ownedBy(context, goals), eq(goals.id, recentRow.goalId)))
             .limit(1)
         : Promise.resolve([]),
       recentRow
-        ? pendingCandidates(database, recentRow.goalId)
+        ? pendingCandidates(database, context, recentRow.goalId)
         : Promise.resolve([]),
       firstGoalRow
-        ? pendingCandidates(database, firstGoalRow.id)
+        ? pendingCandidates(database, context, firstGoalRow.id)
         : Promise.resolve([]),
     ]);
     const storedTaskPending = Boolean(
@@ -250,27 +272,27 @@ export function createSelectionService(database: Database): SelectionService {
   }
 
   return {
-    async resolve(_context) {
-      void _context;
-      return resolveFromDb();
+    async resolve(context) {
+      requireUserId(context);
+      return resolveFromDb(context);
     },
 
-    async getStored(_context) {
-      void _context;
-      return readStoredSelection(database);
+    async getStored(context) {
+      requireUserId(context);
+      return readStoredSelection(database, context);
     },
 
-    async set(_context, input) {
-      void _context;
+    async set(context, input) {
+      requireUserId(context);
       const value = parsed(selectionSetSchema.safeParse(input));
       return database.transaction(async (tx) => {
-        await lockScope(tx, "app:selection");
-        await lockScope(tx, `goal:${value.goalId}`);
+        await lockScope(tx, context, "app:selection");
+        await lockScope(tx, context, `goal:${value.goalId}`);
 
         const [goal] = await tx
           .select()
           .from(goals)
-          .where(eq(goals.id, value.goalId))
+          .where(and(ownedBy(context, goals), eq(goals.id, value.goalId)))
           .limit(1);
         if (!goal)
           throw new DomainError("GOAL_NOT_FOUND", "Goal was not found.", {
@@ -283,7 +305,7 @@ export function createSelectionService(database: Database): SelectionService {
             { goalId: goal.id },
           );
 
-        const candidates = await pendingCandidates(tx, goal.id);
+        const candidates = await pendingCandidates(tx, context, goal.id);
         let taskId: string | null;
 
         if (value.taskId === null || value.taskId === undefined) {
@@ -297,6 +319,7 @@ export function createSelectionService(database: Database): SelectionService {
               .from(sessions)
               .where(
                 and(
+                  ownedBy(context, sessions),
                   eq(sessions.goalId, goal.id),
                   eq(sessions.status, "completed"),
                   isNotNull(sessions.endedAt),
@@ -320,7 +343,7 @@ export function createSelectionService(database: Database): SelectionService {
           const [task] = await tx
             .select()
             .from(tasks)
-            .where(eq(tasks.id, value.taskId))
+            .where(and(ownedBy(context, tasks), eq(tasks.id, value.taskId)))
             .limit(1);
           if (!task)
             throw new DomainError("TASK_NOT_FOUND", "Task was not found.", {
@@ -341,9 +364,13 @@ export function createSelectionService(database: Database): SelectionService {
           taskId = task.id;
         }
 
-        await applySelection(tx, { goalId: goal.id, taskId });
+        await applySelection(tx, context, { goalId: goal.id, taskId });
         const [selectedTask] = taskId
-          ? await tx.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
+          ? await tx
+              .select()
+              .from(tasks)
+              .where(and(ownedBy(context, tasks), eq(tasks.id, taskId)))
+              .limit(1)
           : [null];
         return {
           goal,
@@ -354,12 +381,12 @@ export function createSelectionService(database: Database): SelectionService {
       });
     },
 
-    async clear(_context) {
-      void _context;
+    async clear(context) {
+      requireUserId(context);
       parsed(selectionClearSchema.safeParse({}));
       await database.transaction(async (tx) => {
-        await lockScope(tx, "app:selection");
-        await applySelection(tx, null);
+        await lockScope(tx, context, "app:selection");
+        await applySelection(tx, context, null);
       });
     },
   };
@@ -368,6 +395,7 @@ export function createSelectionService(database: Database): SelectionService {
 /** Next pending Task of a Goal strictly after `position` (or first). */
 export async function nextPendingTaskInGoal(
   tx: Database | Transaction,
+  context: AuthenticatedContext,
   goalId: string,
   afterPosition?: number,
 ): Promise<Task | null> {
@@ -376,6 +404,7 @@ export async function nextPendingTaskInGoal(
     .from(tasks)
     .where(
       and(
+        ownedBy(context, tasks),
         eq(tasks.goalId, goalId),
         eq(tasks.status, "pending"),
         afterPosition === undefined

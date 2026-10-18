@@ -13,8 +13,13 @@ export default async function ProtectedLayout({
 }: {
   children: React.ReactNode;
 }) {
-  if (!(await readWebSession())) redirect("/login");
-  const settings = await settingsService.get({ actor: "web" });
+  const context = await readWebSession();
+  if (!context) redirect("/login");
+  const settings = await settingsService.get(context);
   if (!settings.setupCompletedAt) redirect("/setup");
-  return <AppShell>{children}</AppShell>;
+  return (
+    <AppShell key={context.userId} userId={context.userId}>
+      {children}
+    </AppShell>
+  );
 }

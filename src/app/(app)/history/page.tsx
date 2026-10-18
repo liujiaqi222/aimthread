@@ -1,3 +1,4 @@
+import { requireWebSession } from "@/auth/web-session";
 import { HistoryView } from "@/components/history-view";
 import { historyService, settingsService, statisticsService } from "@/services";
 import { reportRange, type ReportPeriod } from "@/shared/report-period";
@@ -16,8 +17,8 @@ export default async function HistoryPage({
 }: {
   searchParams?: Promise<HistorySearchParams>;
 }) {
+  const context = await requireWebSession();
   const query = (await searchParams) ?? {};
-  const context = { actor: "web" } as const;
   const settings = await settingsService.get(context);
   const now = new Date();
   const todayKey = localDateKey(now, settings.timezone);
