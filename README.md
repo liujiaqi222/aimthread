@@ -1,65 +1,93 @@
 # AimThread
 
-AimThread ([aimthread.com](https://aimthread.com)) 是一个 AI-native 的目标执行与时间管理工具。它记住目标的下一步，并记录你真正投入的时间；你也可以在 ChatGPT 网页端讨论计划，并通过 Plugin 写回个人账户。
+**把和 AI 讨论的计划持续做下去。**
 
-> **AI is the planner. AimThread is the execution system.**
+AimThread 是一个本地优先的 AI 计划执行工作台。它把计划、计时、执行反馈和后续调整接在一起，帮助你在开始困难、遇到阻碍或中断几天之后，仍然知道从哪里继续。
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fliujiaqi222%2Faimthread&project-name=aimthread&repository-name=aimthread&integration-ids=oac_3sK3gnG06emjIEVL09jjntDD&env=BETTER_AUTH_SECRET%2CNEXT_PUBLIC_APP_NAME&envDefaults=%7B%22NEXT_PUBLIC_APP_NAME%22%3A%22AimThread%22%7D&envDescription=Set%20one%20unique%20random%20authentication%20secret.%20Neon%20provides%20DATABASE_URL%20automatically.)
+> **当前状态：从零重建，产品定义阶段。**
+>
+> 新版采用本地 Web + Electron，数据保存在本机。目前只有产品文档，尚无新版可运行程序、安装包或启动命令。旧在线实现保留在 Git 历史中，不作为新版架构约束。
 
-一键部署会克隆仓库、创建并连接 Neon、收集认证 Secret，并在构建阶段自动执行 committed Drizzle migrations。公开使用前，须在 Vercel Production 配置下列 Google / GitHub OAuth 凭证与 `BETTER_AUTH_URL=https://aimthread.com`，完成提供商回调登记后重新部署。首次社交登录自动建立个人账户；目标、执行记录、偏好和 AI 授权按 User 隔离。
+完整需求见 [产品需求文档](docs/prd.md)。
 
-## Local development
+## 为什么做它
 
-要求 Node.js 20+、pnpm，以及 PostgreSQL。复制环境变量模板并填写本地值：
+AI 可以帮你制定计划，但真正做起来之后，时间花在哪里、实际进展如何、又卡在什么地方，经常没有被接住。下一次讨论，又要从头解释。
 
-```bash
-cp .env.example .env.local
-pnpm install
-pnpm db:migrate
-# 可选：给本地数据库中指定的现有 User 写入示例
-pnpm db:seed --user-id=YOUR_USER_ID
-pnpm dev
+AimThread 让这段过程连续起来：
+
+```text
+和 AI 讨论目标与计划
+         ↓
+认可下一步，开始执行和计时
+         ↓
+保存真实投入、进展与接续提示
+         ↓
+根据现实调整，下次继续
 ```
 
-`pnpm db:migrate` 使用已提交的 Drizzle migrations 建库；`pnpm db:seed` 仅允许连接 localhost/127.0.0.1，必须显式传入已存在 User 的 ID，并在该用户已有目标时默认跳过。v0.3 使用全新的 Goal → Task/Session 数据结构，不会自动转换旧版 Track 数据；用户归属迁移 `0004_user_ownership` 要求空数据库，发现旧用户或业务数据会拒绝执行，不回填，也不使用默认用户。
+计时和统计记录现实，AI 帮你理解和调整。没有困难时直接开始，不要求每次先聊天；没配置模型也能手动管理目标、计时和回看。
 
-项目尚未上线，旧测试数据无需保留，可以清空现有开发库后运行 `pnpm db:migrate`，无需另建数据库。若重建全部应用表，也需同时清空 Drizzle 迁移记录，让初始化从第一条迁移开始。清空会移除旧用户、业务数据、登录会话、签名密钥和 AI 授权；普通 `db:migrate` 不会自动执行清理。
+## 产品形态
 
-环境变量：
+- **本地 Web：**启动本机服务后，可以独立在浏览器使用，不需要打开 Electron。
+- **Electron 桌面端：**打开同一套界面，提供窗口、托盘、通知等桌面能力。
+- **共享本地数据：**两个入口连接同一服务与 SQLite 数据库，共享当前计划和计时，不维护两份状态。
+- **无需云账户：**不注册、不登录，不依赖在线业务部署、远程数据库或云同步。
+- **模型由你选择：**通过 BYOK 接云模型，也可连接本地模型或提供兼容接口的中转。
+- **完整暗黑模式：**支持浅色、暗黑与跟随系统，而不只在计时时切换配色。
 
-- `DATABASE_URL`：Neon 或兼容 PostgreSQL 连接串；
-- `BETTER_AUTH_SECRET`：Web Session 与 OAuth 令牌使用的服务端 Secret，至少 32 个字符；
-- `BETTER_AUTH_URL`：本地显式填写 `http://localhost:3000`，Production 填写 `https://aimthread.com`，不包含 `/api/auth`；
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`：Google Web OAuth 客户端凭证；
-- `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`：GitHub OAuth App 凭证；
-- `NEXT_PUBLIC_APP_NAME`：公开应用名称，默认 `AimThread`。
+首版面向一台电脑上的个人使用，不提供多设备同步、手机远程连接或局域网共享。
 
-OAuth 配置与回调：
+## 核心体验
 
-| 环境 | Google Authorized redirect URI | GitHub Authorization callback URL |
-| --- | --- | --- |
-| 本地 | `http://localhost:3000/api/auth/callback/google` | `http://localhost:3000/api/auth/callback/github` |
-| Production | `https://aimthread.com/api/auth/callback/google` | `https://aimthread.com/api/auth/callback/github` |
+**计划可以简单。**一个目标可以直接开始，或者列几项任务；复杂目标才按“阶段 → 任务”组织，不强迫先拆出完整路线。
 
-Google 创建 Web application 类型的 OAuth 客户端，配置对应站点 origin 与上表回调；测试模式需将验收账号加入测试用户。GitHub 为本地、正式分别创建 OAuth App（各自一个 callback URL），Homepage URL 填对应站点。服务器使用 GitHub 的 `read:user`、`user:email` 权限读取身份及邮箱验证状态；Google 使用 `openid`、`email`、`profile`。不支持为每个 Vercel Preview 地址登记真实登录。
+**下一步可以商量。**当你觉得任务太大、卡住或只有十五分钟，AI 带着相关上下文帮助缩小行动、补前置条件或调整顺序。建议具体可审阅，接受后才改变计划。
 
-四个 OAuth 值只放本地 `.env.local` 或 Vercel 服务端环境变量，不能加 `NEXT_PUBLIC_`。未配置的入口会禁用并提示配置缺失，没有密码或共享用户回退。两个邮箱均已验证时，相同邮箱的 Google/GitHub 身份才自动进入同一 User；任一未验证则拒绝关联，用户可改用原登录方式。不同邮箱为独立账户，本轮不提供手动绑定、解绑或合并。访问/刷新令牌由 Better Auth 加密保存，ID token 验证完成后丢弃；`BETTER_AUTH_SECRET` 应在同一数据库的部署间保持一致。
+**执行留下可靠记录。**正计时 / 番茄钟、暂停恢复、过程笔记、可选走神记录、真实投入和历史纠错。结束先保存时间，再选择是否补充反馈。
 
-ChatGPT 开发者测试时，在 Plugins 的 Add 菜单中选择 **Create MCP App**，再使用 OAuth 2.1 连接 `/mcp`。用户在 AimThread 登录并确认读写权限后，ChatGPT 才会获得限时 access token；网页不展示、复制或保存静态 MCP Token。
+**中断也能接上。**接续提示和历史反馈帮助恢复，不用欠账、断签或内疚提醒催促你。未知停机间隔要核对，不自动计为专注。
 
-## Verification
+**回看帮助调整。**足迹展示实际投入、执行和完成任务。AI 可以基于这些事实讨论变化，但不会把投入时长直接当作成果或能力。
 
-```bash
-pnpm test:unit
-pnpm test:db:up
-pnpm test:integration
-pnpm test:e2e
-pnpm lint
-pnpm typecheck
+## 目标架构
+
+```text
+浏览器 ──────────┐
+                ├── 本地 Web 界面 / 本机 HTTP 接口
+Electron 窗口 ──┘                 │
+                           共享本地应用服务
+                              ├── 领域规则与计时
+                              ├── SQLite 持久化
+                              └── AI 引导机制（Harness）
+                                       │
+                                  用户配置的模型
+                              云 API / 本地模型 / 中转
+
+Electron 主进程：服务启动与连接、窗口 / 托盘、通知和系统集成
 ```
 
-`test:integration` / `test:e2e` 通过现有连接新建随机隔离 schema，迁移与测试后只删除本轮 schema；不清理开发或正式业务表。直接运行测试框架仅允许受保护的本地 `_test` 数据库或隔离 schema。测试 User、签名登录 Cookie 和 MCP token 只由测试进程初始化，没有生产登录后门。
+技术基线确定为 **Electron + React + TypeScript**：Vite 构建共享界面，本地 Node 服务承接业务与模型调用，SQLite 保存数据，Electron 提供桌面入口。前后端统一使用 TypeScript，先在一个工程内按界面、本地服务、桌面入口组织，按实际需要细分模块。具体驱动、服务框架、模型 SDK 和打包方式在实现时确定。
 
-用户隔离实现与验收说明见 [docs/implementation/issue-39-user-isolation.md](docs/implementation/issue-39-user-isolation.md)。社交登录实现和真实验收状态见 [docs/implementation/issue-40-social-login.md](docs/implementation/issue-40-social-login.md)。
+本地服务是唯一的业务写入和计时权威。重复启动复用同一数据目录的服务实例，浏览器和桌面不分别打开独立业务状态。渲染层不直接操作数据库、已保存的模型 Key 或任意文件系统。
 
-详细产品规格见 [docs/prd.md](docs/prd.md)，MVP tickets 见 [docs/tickets/README.md](docs/tickets/README.md)。
+应用运行不需要公网服务器，但独立浏览器使用仍需要本机服务。关闭浏览器不等于退出服务；服务全部退出后，不承诺继续执行提醒或 AI 任务。
+
+## 数据与模型
+
+目标、任务、执行记录、讨论、建议和设置保存在本机应用数据目录。需要可靠的 schema 升级、一致性备份和恢复能力，不能仅依赖浏览器缓存。
+
+模型请求通过本地服务发出，凭据优先放在系统安全存储，普通备份不包含 Key。未配置模型时，手动功能应能离线使用。
+
+**本地保存不等于所有处理都离线。**使用云模型时，相关上下文会发送到你配置的服务；本地模型或中转的实际数据流也需要核实。走神记录默认不进入 AI 上下文。
+
+首版优先支持 OpenAI-compatible 接口，具体服务和工具调用能力需要实测；目前不宣称 Magpie 或任意本地模型已经兼容。外部 AI / MCP 接入保留扩展边界，不作为使用新版的前提。
+
+## 当前范围
+
+本轮先定义产品和本地架构，随后再设计交互、建立工程和实现闭环。这里没有旧版的云部署要求、账户体系或沿用票据。
+
+- 产品规范：[docs/prd.md](docs/prd.md)
+- 旧实现：Git 历史
+- 当前交付：README 与 PRD；新版应用尚未实现
