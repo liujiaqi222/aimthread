@@ -86,9 +86,13 @@ Supported first-class through `createProvider()` + `openAICompletionsApi()` (REA
 - **Engine seam:** the agent layer takes a `PiEngine = { model, streamFn }` (`src/agent/models.ts:46-52`). Tests replace the engine and production resolves it from settings, so there is no global default model (`piEngineFor` throws on purpose, `models.ts:188-198`). That is the PRD §6.1 "no factory default" rule.
 - **Packaging smoke test:** `scripts/smoke-provider-runtime.mjs` checks offline that the bundled app can initialise lazy provider adapters (Google, Bedrock), with the network forced closed and an `onPayload` sentinel. It runs in `desktop:dist` and is relevant if AimThread bundles the server.
 
-## 9. Reuse versus avoid (design ideas only; AGPL applies to the code)
+## 9. Reuse versus avoid
 
-Worth reusing as patterns:
+learnharness is **AGPL-3.0-only**, so every item below is labelled:
+- **Reusable as a pattern:** reimplement the idea from scratch. Do not copy the code.
+- **Copyable code:** may be copied or used directly. Only the MIT pi packages (`@earendil-works/pi-ai`, `pi-agent-core`, including `fauxProvider`/`createFauxCore` and the README examples) fall in this category. **No learnharness source is copyable code.** The file:line references throughout this doc point to designs to study, not code to paste.
+
+Reusable as a pattern (learnharness, AGPL; reimplement, do not copy):
 - Thin engine seam `{model, streamFn}` with the faux provider in tests.
 - Stateless agent per turn, built from the record. Persist only the appended suffix, after stripping `system` messages, and mint ids at one write point.
 - Write-ahead user input. Persist the partial transcript on abort.
@@ -97,7 +101,7 @@ Worth reusing as patterns:
 - Custom endpoint: closure-based `auth.resolve`, provider rebuilt on (URL, auth-mode, key-binding) change, re-validation before each request, metadata ladder, and a discovery fetch that blocks redirects and caps body size.
 - Slim the SSE wire event and keep compacted state instead of an event log.
 
-Worth avoiding or keeping out of scope:
+Avoid or keep out of scope (whatever the licence):
 - Reflecting saved keys into `process.env` (`models.ts:79-81`). It works, but it spreads secrets process-wide, which conflicts with PRD §6.3. A per-provider `auth.apiKey.resolve` that reads the keychain is available instead.
 - The subscription and CLI bridges (`chatgpt-*`, `claude-code/*`, `subscription-*`, `electron/subscriptions.cjs`). They are large and out of PRD v1 scope.
 - The placeholder-key approach for keyless endpoints, if a server rejects any `Authorization` header. The README's `{ auth: {} }` route should be verified instead.
