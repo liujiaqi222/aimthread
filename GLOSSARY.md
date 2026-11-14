@@ -4,6 +4,32 @@
 
 ## Language
 
+### 计时
+
+**Session**:
+一次针对固定目标 / 任务和计时方式的执行，从开始到结束或取消；一个数据集最多一个未结束 Session。
+_Avoid_: 计时记录、番茄（番茄只是 Session 内的轮次）
+
+**Focus Interval（专注区间）**:
+Session 内一段实际计入投入的连续专注。
+_Avoid_: 片段、时间段
+
+**Checkpoint（检查点）**:
+服务最后一次确认计时仍在进行的时刻。
+_Avoid_: 心跳、保存点
+
+**Uncertain Gap（不确定时段）**:
+检查点之后、应用未能观察到的时间，确认前不计投入。
+_Avoid_: 空白期、丢失时间
+
+**Reconciliation（恢复核对）**:
+用户决定如何处理一段不确定时段的动作；完成前不能开始新的 Session。
+_Avoid_: 恢复、修复（恢复专指 Restore）
+
+**Manual Correction（人工更正）**:
+用户补入、未被应用观察到的投入，与观察到的 Focus Interval 区分记录。
+_Avoid_: 补录、手动时间
+
 ### 数据保护
 
 **Backup（备份）**:
