@@ -1,0 +1,11 @@
+appId: com.aimthread.app
+productName: AimThread
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+mac:
+  target: dir
+  category: public.app-category.productivity

@@ -1,0 +1,72 @@
+@import 'tailwindcss';
+
+/*
+ * AimThread 自定义主题 token（#65 / #68）：不使用 shadcn 默认主题。
+ * 浅色 / 暗黑两套变量；当前为占位值，正式视觉在 #68 定稿。
+ * 「跟随系统」由界面用 prefers-color-scheme 判断并切换 data-theme。
+ */
+
+:root {
+  --background: oklch(0.985 0.002 250);
+  --foreground: oklch(0.2 0.01 260);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.01 260);
+  --primary: oklch(0.5 0.15 280);
+  --primary-foreground: oklch(0.99 0.002 250);
+  --secondary: oklch(0.94 0.005 260);
+  --secondary-foreground: oklch(0.3 0.01 260);
+  --muted: oklch(0.94 0.005 260);
+  --muted-foreground: oklch(0.5 0.01 260);
+  --accent: oklch(0.93 0.01 270);
+  --accent-foreground: oklch(0.3 0.01 260);
+  --destructive: oklch(0.55 0.2 25);
+  --border: oklch(0.89 0.005 260);
+  --input: oklch(0.89 0.005 260);
+  --ring: oklch(0.5 0.15 280);
+  --radius: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --background: oklch(0.18 0.008 260);
+    --foreground: oklch(0.95 0.003 250);
+    --card: oklch(0.22 0.008 260);
+    --card-foreground: oklch(0.95 0.003 250);
+    --primary: oklch(0.68 0.14 285);
+    --primary-foreground: oklch(0.15 0.01 260);
+    --secondary: oklch(0.27 0.008 260);
+    --secondary-foreground: oklch(0.93 0.003 250);
+    --muted: oklch(0.27 0.008 260);
+    --muted-foreground: oklch(0.68 0.008 260);
+    --accent: oklch(0.3 0.012 270);
+    --accent-foreground: oklch(0.93 0.003 250);
+    --destructive: oklch(0.65 0.18 25);
+    --border: oklch(0.32 0.008 260);
+    --input: oklch(0.32 0.008 260);
+    --ring: oklch(0.68 0.14 285);
+  }
+}
+
+:root[data-theme='dark'] {
+  --background: oklch(0.18 0.008 260);
+  --foreground: oklch(0.95 0.003 250);
+  --card: oklch(0.22 0.008 260);
+  --card-foreground: oklch(0.95 0.003 250);
+  --primary: oklch(0.68 0.14 285);
+  --primary-foreground: oklch(0.15 0.01 260);
+  --secondary: oklch(0.27 0.008 260);
+  --secondary-foreground: oklch(0.93 0.003 250);
+  --muted: oklch(0.27 0.008 260);
+  --muted-foreground: oklch(0.68 0.008 260);
+  --accent: oklch(0.3 0.012 270);
+  --accent-foreground: oklch(0.93 0.003 250);
+  --destructive: oklch(0.65 0.18 25);
+  --border: oklch(0.32 0.008 260);
+  --input: oklch(0.32 0.008 260);
+  --ring: oklch(0.68 0.14 285);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
