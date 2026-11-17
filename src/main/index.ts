@@ -1,51 +1,68 @@
-import { app, BrowserWindow, utilityProcess, MessageChannelMain, ipcMain } from 'electron'
+/**
+ * Main process glue (#64 startup order / #67): thin Electron wiring around
+ * the pure Startup orchestrator. Main owns windows, the service launcher,
+ * the host bridge, port issuing, and the repair page.
+ */
+
+import { app, BrowserWindow, ipcMain, MessageChannelMain, utilityProcess } from 'electron'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import os from 'node:os'
+import { acquireDirLock } from '@shared/fs/dir-lock'
+import { resolveDataDir } from '@shared/fs/data-dir'
+import { resolveLocale } from '@shared/i18n'
+import { ElectronHostBridge } from './host-electron'
+import { Startup, type ServiceHandlers, type ServiceProcess, type StartupErrorInfo } from './startup'
+import type { ServiceMessage } from '@service/host'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
+// Tests (and anyone running several dev copies) can isolate the Chromium
+// profile — and thus the single-instance lock — with this env var. Must run
+// before anything touches app.getPath('userData').
+if (process.env['AIMTHREAD_USER_DATA']) {
+  app.setPath('userData', process.env['AIMTHREAD_USER_DATA'])
+}
+
+// ---------------------------------------------------------------------------
+// Global state
+// ---------------------------------------------------------------------------
+
 let mainWindow: BrowserWindow | null = null
-let serviceProcess: Electron.UtilityProcess | null = null
+let windowMode: 'app' | 'repair' | null = null
+let serviceChild: Electron.UtilityProcess | null = null
+let hostBridge: ElectronHostBridge | null = null
+let startup: Startup | null = null
+const portTargets = new Set<BrowserWindow['webContents']>()
 
-function resolveServiceModulePath(): string {
-  // electron-vite 把服务作为 main 目标的第二个入口，产物与主入口同目录。
-  // 开发与打包产物中均为 out/main/service.js。
-  return join(__dirname, 'service.js')
+const dataDir = app.isPackaged
+  ? resolveDataDir({
+      env: process.env,
+      isPackaged: true,
+      electronUserData: app.getPath('userData'),
+      homedir: os.homedir(),
+      platform: process.platform
+    })
+  : resolveDataDir({ env: process.env, isPackaged: false, homedir: os.homedir(), platform: process.platform })
+
+const serviceModulePath = join(__dirname, 'service.js')
+const rendererIndex = () =>
+  process.env['ELECTRON_RENDERER_URL']
+    ? process.env['ELECTRON_RENDERER_URL']
+    : join(__dirname, '../renderer/index.html')
+const repairPageUrl = (query: Record<string, string>) => {
+  const search = new URLSearchParams(query).toString()
+  return process.env['ELECTRON_RENDERER_URL']
+    ? `${process.env['ELECTRON_RENDERER_URL']}/repair.html?${search}`
+    : `file://${join(__dirname, '../renderer/repair.html')}?${search}`
 }
 
-function spawnService(): Promise<Electron.UtilityProcess> {
-  return new Promise((resolve, reject) => {
-    const child = utilityProcess.fork(resolveServiceModulePath(), [], {
-      stdio: 'pipe',
-      env: {
-        ...process.env,
-        AIMTHREAD_DATA_DIR: app.getPath('userData')
-      }
-    })
-    const timer = setTimeout(() => reject(new Error('service spawn timeout')), 10_000)
-    child.on('spawn', () => {
-      clearTimeout(timer)
-      resolve(child)
-    })
-    child.on('exit', (code) => {
-      console.error(`[service] exited with code ${code}`)
-      if (serviceProcess === child) serviceProcess = null
-    })
-    child.stderr?.on('data', (d) => console.error(`[service:err] ${d}`))
-    child.stdout?.on('data', (d) => console.log(`[service:out] ${d}`))
-    // V1 自检（#65）：把服务的 V1 结果打到 stdout，便于脚本核对。
-    child.on('message', (msg) => {
-      const m = msg as { kind?: string; result?: unknown }
-      if (m?.kind === 'v1-result') {
-        console.log(`V1_RESULT:${JSON.stringify(m.result)}`)
-        app.quit()
-      }
-    })
-  })
-}
+// ---------------------------------------------------------------------------
+// Windows
+// ---------------------------------------------------------------------------
 
-function createWindow() {
-  mainWindow = new BrowserWindow({
+function createWindow(): BrowserWindow {
+  const win = new BrowserWindow({
     width: 1200,
     height: 800,
     show: false,
@@ -57,65 +74,196 @@ function createWindow() {
       sandbox: false
     }
   })
-
-  mainWindow.on('ready-to-show', () => mainWindow?.show())
-  mainWindow.on('closed', () => {
-    mainWindow = null
+  win.on('ready-to-show', () => win.show())
+  win.on('closed', () => {
+    if (mainWindow === win) {
+      mainWindow = null
+      windowMode = null
+    }
   })
-
-  if (process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  }
+  win.webContents.on('destroyed', () => {
+    portTargets.delete(win.webContents)
+  })
+  return win
 }
 
-/** 给一个目标（窗口或未来的托盘）发放一个连到服务的 MessagePort。 */
-function issuePort(target: { postMessage(channel: string, msg: unknown, transfer?: unknown[]): void }) {
-  if (!serviceProcess) return
+function ensureWindow(): BrowserWindow {
+  return mainWindow ?? (mainWindow = createWindow())
+}
+
+function showRepairPage(error: StartupErrorInfo): void {
+  windowMode = 'repair'
+  const win = ensureWindow()
+  const locale = resolveLocale(app.getPreferredSystemLanguages())
+  win.loadURL(repairPageUrl({ code: error.code, params: JSON.stringify(error.params), locale, dataDir }))
+}
+
+function showApp(): void {
+  windowMode = 'app'
+  const win = ensureWindow()
+  const url = rendererIndex()
+  if (url.startsWith('file://') || url.startsWith('http')) win.loadURL(url)
+  else win.loadFile(url)
+  win.focus()
+}
+
+// ---------------------------------------------------------------------------
+// Port issuing (ADR 0001): one MessageChannelMain per client; the service
+// side receives port1, the window receives port2 via preload.
+// ---------------------------------------------------------------------------
+
+function issuePort(target: BrowserWindow['webContents']): void {
+  if (!serviceChild || startup?.state !== 'ready') return
   const { port1, port2 } = new MessageChannelMain()
-  serviceProcess.postMessage({ kind: 'connect' }, [port1])
-  // WebContents.postMessage 发给 preload 的 ipcRenderer（文档标准做法）；
-  // preload 再经 window.postMessage 转交主世界。
+  serviceChild.postMessage({ kind: 'connect' }, [port1])
   target.postMessage('aimthread:port', null, [port2])
 }
 
-ipcMain.on('aimthread:request-port', (event) => {
+ipcMain.handle('aimthread:request-port', (event) => {
+  portTargets.add(event.sender)
   issuePort(event.sender)
 })
 
-app.whenReady().then(async () => {
-  // 单实例：拿不到锁就把本次启动视为唤起请求，直接退出。
-  const gotLock = app.requestSingleInstanceLock()
-  if (!gotLock) {
-    app.quit()
+// ---------------------------------------------------------------------------
+// Service launcher
+// ---------------------------------------------------------------------------
+
+function forkService(_dataDir: string, handlers: ServiceHandlers): ServiceProcess {
+  const child = utilityProcess.fork(serviceModulePath, [], {
+    stdio: 'pipe',
+    env: {
+      ...process.env,
+      AIMTHREAD_DATA_DIR: dataDir,
+      AIMTHREAD_APP_VERSION: app.getVersion(),
+      AIMTHREAD_VALIDATE_OUTPUT: app.isPackaged ? process.env['AIMTHREAD_VALIDATE_OUTPUT'] ?? '' : '1'
+    }
+  })
+  serviceChild = child
+
+  child.on('message', (message: ServiceMessage) => {
+    switch (message.kind) {
+      case 'ready':
+        handlers.onReady(message.info)
+        return
+      case 'startup-error':
+        handlers.onStartupError(message.error)
+        return
+      case 'host-call':
+      case 'host-subscribe':
+      case 'host-unsubscribe':
+        hostBridge?.handleServiceMessage(message)
+        return
+      case 'v1-result':
+        // V1 verify hook (#65): print and quit.
+        console.log(`V1_RESULT:${JSON.stringify(message.result)}`)
+        app.quit()
+        return
+      default:
+        return
+    }
+  })
+  child.on('exit', (code) => {
+    if (serviceChild === child) serviceChild = null
+    handlers.onExit(code)
+  })
+  child.stderr?.on('data', (d) => console.error(`[service:err] ${d}`))
+  child.stdout?.on('data', (d) => console.log(`[service:out] ${d}`))
+
+  return {
+    kill: () => {
+      try {
+        child.kill()
+      } catch {
+        // Already gone.
+      }
+    },
+    get pid() {
+      return child.pid ?? null
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// App lifecycle
+// ---------------------------------------------------------------------------
+
+app.whenReady().then(() => {
+  hostBridge = new ElectronHostBridge((msg) => {
+    serviceChild?.postMessage(msg)
+  })
+
+  startup = new Startup({
+    dataDir,
+    requestSingleInstanceLock: () => app.requestSingleInstanceLock(),
+    acquireLock(dir) {
+      return acquireDirLock(dir)
+    },
+    forkService,
+    onUiReady(info) {
+      console.log(`[main] service ready (schema v${info.toVersion})`)
+      if (windowMode !== 'app') showApp()
+      // Re-issue ports: every attached window gets a fresh channel to the
+      // (re)started service; the renderer also re-requests on reconnect.
+      for (const target of portTargets) {
+        if (!target.isDestroyed()) issuePort(target)
+      }
+    },
+    onRepairPage(error) {
+      console.error(`[main] startup error: ${error.code}`, error.params)
+      showRepairPage(error)
+    },
+    log: (m) => console.log(`[main] ${m}`)
+  })
+
+  if (!startup.start()) {
+    app.quit() // another instance owns the single-instance lock
     return
   }
+
   app.on('second-instance', () => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore()
       mainWindow.focus()
+    } else if (startup?.state === 'ready') {
+      showApp()
+    } else if (startup?.lastError) {
+      showRepairPage(startup.lastError)
     }
   })
+})
 
-  try {
-    serviceProcess = await spawnService()
-  } catch (e) {
-    console.error('failed to spawn service', e)
-  }
-
-  createWindow()
+// Repair-page actions (main owns openPath/quit; retry goes through the
+// orchestrator — the data-dir lock is still held).
+ipcMain.on('aimthread:repair-retry', () => {
+  startup?.retry()
+})
+ipcMain.on('aimthread:repair-open-data-dir', () => {
+  void import('electron').then(({ shell }) => shell.openPath(dataDir))
+})
+ipcMain.on('aimthread:repair-quit', () => {
+  app.quit()
 })
 
 app.on('window-all-closed', () => {
-  // M1 骨架：关窗即退出（托盘驻留在 #69）。
-  if (!serviceProcess) app.quit()
+  // #67: keep running after the window closes; the tray lands in #69.
 })
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  if (BrowserWindow.getAllWindows().length === 0 && startup?.state === 'ready') showApp()
 })
 
 app.on('before-quit', () => {
-  serviceProcess?.kill()
+  hostBridge?.dispose()
+  startup?.shutdown()
 })
+
+// E2E hooks (#67): enabled only when the test runner sets this env var.
+// Read-only diagnostics — the tests kill the service via its pid.
+if (process.env['AIMTHREAD_E2E_HOOKS'] === '1') {
+  app.whenReady().then(() => {
+    ;(globalThis as Record<string, unknown>).__aimthreadE2E = {
+      getServicePid: () => startup?.servicePid ?? null,
+      getStartupState: () => startup?.state ?? 'idle'
+    }
+  })
+}

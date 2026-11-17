@@ -2,10 +2,13 @@
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
   "include": [
     "electron.vite.config.*",
+    "vite.web.config.ts",
     "src/main/**/*",
     "src/preload/**/*",
     "src/service/**/*",
     "src/shared/**/*",
+    "src/ui/client/**/*",
+    "src/ui/vite-env.d.ts",
     "scripts/**/*",
     "test/**/*"
   ],
@@ -16,7 +19,8 @@
     "paths": {
       "@shared/*": ["src/shared/*"],
       "@service/*": ["src/service/*"],
-      "@main/*": ["src/main/*"]
+      "@main/*": ["src/main/*"],
+      "@ui/*": ["src/ui/*"]
     }
   }
 }

@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
-// preload 只做一件事：把主进程发来的 MessagePort 转交给页面（ADR 0001）。
+// Preload stays minimal (#64 D1): hand MessagePorts to the page, and expose
+// the repair-page action bridge. Everything else goes through the service
+// protocol.
+
 // contextIsolation 下 MessagePort 不能直接过桥，因此经 window.postMessage
 // 中转（Electron 文档的标准做法），页面在主世界监听 'message' 事件取 e.ports。
 ipcRenderer.on('aimthread:port', (event) => {
@@ -8,7 +11,20 @@ ipcRenderer.on('aimthread:port', (event) => {
 })
 
 contextBridge.exposeInMainWorld('aimthread', {
-  requestPort(): void {
-    ipcRenderer.send('aimthread:request-port')
+  /** Ask main for a fresh MessagePort connected to the service. */
+  async requestPort(): Promise<void> {
+    await ipcRenderer.invoke('aimthread:request-port')
+  },
+  /** Repair/fatal page actions; main owns openPath and quit. */
+  repair: {
+    retry(): void {
+      ipcRenderer.send('aimthread:repair-retry')
+    },
+    openDataDir(): void {
+      ipcRenderer.send('aimthread:repair-open-data-dir')
+    },
+    quit(): void {
+      ipcRenderer.send('aimthread:repair-quit')
+    }
   }
 })

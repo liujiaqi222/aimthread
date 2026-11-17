@@ -38,7 +38,10 @@ export default defineConfig({
     plugins: [react(), tailwindcss()],
     build: {
       rollupOptions: {
-        input: r('src/ui/index.html')
+        input: {
+          index: r('src/ui/index.html'),
+          repair: r('src/ui/repair.html')
+        }
       }
     },
     resolve: {

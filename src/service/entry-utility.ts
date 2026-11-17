@@ -1,89 +1,129 @@
 /**
- * utilityProcess 入口。由 main 经 `utilityProcess.fork(modulePath)` 启动。
+ * utilityProcess entry. Started by main via `utilityProcess.fork(modulePath)`;
+ * main has already resolved the data directory, taken the single-instance and
+ * data-dir locks, and exported the resolved path via AIMTHREAD_DATA_DIR.
  *
- * M1-1 只搭最小 ping 链路（#65 验收）：主进程发 `{ kind: 'connect' }` 并
- * 附带一个 MessagePort；本入口把端口接到 createService 上，页面即可直连。
- * 数据库、迁移与协议在 #67 接入。
+ * Startup (#64 / #67):
+ *   open + classify + migrate (service/db/migrate.ts) →
+ *     success: report { kind: 'ready' } and serve
+ *     failure: report { kind: 'startup-error', error: { code, params } }
+ *              and wait for main to kill us (never serve on a broken DB).
  *
- * 注意：utilityProcess 里 `process.parentPort` 的 'message' 回调收到的是
- * 带 `.data` / `.ports` 的事件对象（与 worker_threads 不同，见
- * scripts/verify/v1-results.md）。
+ * Channel notes (verified, see scripts/verify/v1-results.md):
+ *   - `process.parentPort` 'message' callbacks receive `{ data, ports }`.
+ *   - MessagePorts forwarded via MessageChannelMain arrive as MessagePortMain:
+ *     EventEmitter style `.on('message', ev => ev.data)` + explicit `start()`.
  */
-import { createService } from './index'
+import { join } from 'node:path'
+import os from 'node:os'
+import { DB_FILE_NAME } from '@shared/app'
+import { resolveDataDir } from '@shared/fs/data-dir'
+import { ServiceError } from '@shared/protocol/errors'
+import { createService, type Service } from './index'
 import { RealClock } from './clock'
-import type { Host, Unsubscribe } from './host'
+import { createParentPortHost, type MainMessage, type ServiceMessage } from './host'
+import type { PortLike } from './rpc/connection'
+import { openAndMigrate } from './db/migrate'
 import { openDatabase } from './db/driver'
+
+// Log hygiene (#67, V1 follow-up): node:sqlite is experimental in Node 24 and
+// prints an ExperimentalWarning on every start. Filter exactly that one; keep
+// every other warning visible.
+const originalEmitWarning = process.emitWarning.bind(process)
+process.emitWarning = ((warning: string, arg2?: unknown, arg3?: unknown) => {
+  if (typeof warning === 'string' && warning.includes('node:sqlite') && warning.includes('experimental')) {
+    return
+  }
+  // Delegates both overloads (code-first and options-first) untouched.
+  return originalEmitWarning(warning as never, arg2 as never, arg3 as never)
+}) as typeof process.emitWarning
 
 const parentPort = process.parentPort as unknown as {
   on(event: 'message', cb: (ev: { data: unknown; ports: unknown[] }) => void): void
-  postMessage(msg: unknown): void
-  once(event: 'message', cb: (ev: { data: unknown; ports: unknown[] }) => void): void
+  postMessage(msg: ServiceMessage): void
 }
 
-// 开发占位宿主：真实宿主桥接（powerMonitor / 通知 / openPath）在 #67 接入。
-const devHost: Host = {
-  onSuspend(_cb): Unsubscribe {
-    return () => {}
-  },
-  onResume(_cb): Unsubscribe {
-    return () => {}
-  },
-  async preferredSystemLanguages(): Promise<string[]> {
-    return ['en']
-  },
-  async notify(_n): Promise<{ shown: boolean }> {
-    return { shown: true }
-  },
-  async openPath(_p): Promise<void> {},
-  localeChanged(_locale): void {}
-}
-
-const service = createService({ clock: new RealClock(), host: devHost })
-
-// utilityProcess 中收到的转交 MessagePort 是 MessagePortMain 语义：
-// EventEmitter 风格 `.on('message')`，回调收到带 `.data` 的事件对象
-// （实测确认，非 worker_threads 的 `.onmessage` 属性，见 v1-results.md）。
-type MessagePortLike = {
-  on(event: 'message', cb: (ev: { data: unknown }) => void): void
-  postMessage(m: unknown): void
-  start(): void
-}
-
-function connect(portLike: unknown): void {
-  const port = portLike as MessagePortLike
-  port.on('message', (ev) => {
-    const msg = ev.data as { id: string; name: string; input?: unknown }
-    if (!msg?.id) return
-    service
-      .handleRequest(msg)
-      .then((reply) => {
-        port.postMessage(reply)
-      })
-      .catch(() => {
-        port.postMessage({ id: msg.id, ok: false, error: { code: 'rpc.internal' } })
-      })
-  })
-  port.start()
-}
-
-parentPort.on('message', (ev) => {
-  const [port] = ev.ports
-  if (port) connect(port)
+const dataDir = resolveDataDir({
+  env: process.env,
+  isPackaged: false,
+  homedir: os.homedir(),
+  platform: process.platform
 })
 
-parentPort.postMessage({ kind: 'ready' })
+// ---------------------------------------------------------------------------
+// Startup
+// ---------------------------------------------------------------------------
 
-/**
- * V1 自检（#65）：AIMTHREAD_V1_CHECK=1 时在当前进程（开发或打包产物）里
- * 用真实驱动执行 #64 V1 的检查项，结果经 parentPort 回给主进程打印。
- * 仅验证用，正常启动路径不执行。
- */
-if (process.env.AIMTHREAD_V1_CHECK === '1') {
-  const dir = process.env.AIMTHREAD_V1_DIR ?? '.'
-  const result = v1Check(`${dir}/v1-app.sqlite`, `${dir}/v1-backup.sqlite`)
-  parentPort.postMessage({ kind: 'v1-result', result })
+const startup = (() => {
+  try {
+    const result = openAndMigrate(join(dataDir, DB_FILE_NAME))
+    return { ok: true as const, result }
+  } catch (e) {
+    if (e instanceof ServiceError) return { ok: false as const, error: { code: e.code, params: e.params } }
+    return { ok: false as const, error: { code: 'rpc.internal', params: { detail: String((e as Error).message) } } }
+  }
+})()
+
+if (!startup.ok) {
+  parentPort.postMessage({ kind: 'startup-error', error: startup.error })
+  // Wait for main to kill this process; do not serve anything meanwhile.
+} else {
+  const start = startup.result
+
+  const host = createParentPortHost({
+    postMessage: (m) => parentPort.postMessage(m),
+    onMessage: (cb) => {
+      parentPort.on('message', (ev) => {
+        const msg = ev.data as MainMessage | { kind: 'host-call' } | null
+        if (msg && (msg.kind === 'host-result' || msg.kind === 'host-event')) cb(msg)
+      })
+    }
+  })
+
+  const service: Service = createService({
+    db: start.db,
+    clock: new RealClock(),
+    host,
+    version: process.env['AIMTHREAD_APP_VERSION'] ?? 'dev',
+    validateOutput: process.env['AIMTHREAD_VALIDATE_OUTPUT'] === '1' || process.env['NODE_ENV'] === 'development'
+  })
+
+  parentPort.on('message', (ev) => {
+    const msg = ev.data as MainMessage | null
+    if (!msg) return
+    switch (msg.kind) {
+      case 'connect': {
+        const port = ev.ports[0] as PortLike | undefined
+        if (port) service.attach(port)
+        return
+      }
+      case 'shutdown': {
+        service.close()
+        process.exit(0)
+        return
+      }
+      default:
+        return // host-result / host-event handled by the host bridge.
+    }
+  })
+
+  parentPort.postMessage({
+    kind: 'ready',
+    info: { schemaVersion: start.toVersion, fromVersion: start.fromVersion, toVersion: start.toVersion }
+  })
+
+  // V1 self-check hook (#65, kept for the verify script; not part of startup).
+  if (process.env['AIMTHREAD_V1_CHECK'] === '1') {
+    const dir = process.env['AIMTHREAD_V1_DIR'] ?? '.'
+    const result = v1Check(`${dir}/v1-app.sqlite`, `${dir}/v1-backup.sqlite`)
+    parentPort.postMessage({ kind: 'v1-result', result })
+  }
 }
 
+/**
+ * V1 self-check (#65): run the #64 V1 checklist through the real driver in
+ * this process (dev build or packaged app). Verification-only.
+ */
 function v1Check(dbPath: string, backupPath: string): unknown {
   try {
     const APP_ID = 0x41494d54
@@ -96,7 +136,7 @@ function v1Check(dbPath: string, backupPath: string): unknown {
     db.exec('PRAGMA wal_autocheckpoint = 0')
     ins.run('d')
     ins.run('e')
-    db.exec(`VACUUM INTO '${backupPath}'`)
+    db.exec(`VACUUM INTO '${backupPath.replaceAll("'", "''")}'`)
     const journal = db.get('PRAGMA journal_mode')
     const sync = db.get('PRAGMA synchronous')
     const fk = db.get('PRAGMA foreign_keys')

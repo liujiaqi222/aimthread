@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AimThread</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f5f5f5;
+        --fg: #1a1a1a;
+        --muted: #666;
+        --card: #ffffff;
+        --danger: #b3261e;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #141414;
+          --fg: #ededed;
+          --muted: #9a9a9a;
+          --card: #1f1f1f;
+          --danger: #f2b8b5;
+        }
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      .card {
+        max-width: 30rem;
+        padding: 2rem;
+        margin: 1rem;
+        background: var(--card);
+        border-radius: 0.75rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+      }
+      h1 {
+        font-size: 1.25rem;
+        margin: 0 0 1rem;
+      }
+      .reason {
+        line-height: 1.6;
+        margin: 0 0 1.25rem;
+      }
+      .datadir {
+        font-family: ui-monospace, monospace;
+        font-size: 0.8rem;
+        color: var(--muted);
+        word-break: break-all;
+        margin: 0 0 1.5rem;
+      }
+      .actions {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      button {
+        font: inherit;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        border: 1px solid color-mix(in srgb, var(--fg) 25%, transparent);
+        background: transparent;
+        color: var(--fg);
+        cursor: pointer;
+      }
+      button:hover {
+        border-color: var(--fg);
+      }
+      button[data-primary='true'] {
+        background: var(--fg);
+        color: var(--bg);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1 data-testid="repair-title"></h1>
+      <p class="reason" data-testid="repair-reason"></p>
+      <p class="datadir" data-testid="repair-data-dir"></p>
+      <div class="actions">
+        <button data-testid="repair-retry" data-primary="true"></button>
+        <button data-testid="repair-open-data-dir"></button>
+        <button data-testid="repair-quit"></button>
+      </div>
+    </div>
+    <script type="module" src="/repair.ts"></script>
+  </body>
+</html>
